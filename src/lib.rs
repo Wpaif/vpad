@@ -1,8 +1,10 @@
 pub mod dispositivo;
+pub mod mapa;
 pub mod mapeamento;
 pub mod perfil;
 pub mod protocolo;
 pub mod servico;
+pub mod teclas;
 
 use axum::{
     Router,
