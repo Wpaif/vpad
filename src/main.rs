@@ -18,7 +18,6 @@ use vpad::{
     servico::{self, Dispositivo, Fabrica},
 };
 
-const PORTA: u16 = 8080;
 /// O celular manda um ping por segundo; sem sinal por tanto tempo, a conexão é encerrada.
 const INATIVIDADE: Duration = Duration::from_secs(6);
 /// De quanto em quanto tempo o servidor relê os aparelhos pareados (o `--revogar` roda em outro processo).
@@ -35,6 +34,7 @@ async fn main() -> io::Result<()> {
         std::process::exit(2);
     });
     let perfil = opcoes.perfil;
+    let porta = opcoes.porta;
 
     let xdg = std::env::var("XDG_CONFIG_HOME").ok();
     let home = std::env::var("HOME").ok();
@@ -108,14 +108,14 @@ async fn main() -> io::Result<()> {
     });
 
     // Sem Nagle: cada toque vira um pacote imediato.
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", PORTA))
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", porta))
         .await?
         .tap_io(|tcp| {
             let _ = tcp.set_nodelay(true);
         });
 
     let ip = local_ip_address::local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "IP_DO_PC".into());
-    let url = url_de_acesso(&ip, PORTA);
+    let url = url_de_acesso(&ip, porta);
     println!("{}", qr_em_texto(&url));
     println!("perfil: {} ({:04x}:{:04x})", perfil.nome, perfil.fabricante, perfil.produto);
     println!("abra no celular: {url}");

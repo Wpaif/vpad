@@ -103,6 +103,15 @@ impl Perfil {
     }
 }
 
+pub const PORTA_PADRAO: u16 = 8080;
+
+fn ler_porta(texto: &str) -> Result<u16, String> {
+    match texto.parse::<u16>() {
+        Ok(p) if p > 0 => Ok(p),
+        _ => Err(format!("porta inválida: {texto:?} (use um número de 1 a 65535)")),
+    }
+}
+
 /// Quem revogar.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Alvo {
@@ -126,6 +135,7 @@ pub enum Acao {
 pub struct Opcoes {
     pub perfil: &'static Perfil,
     pub acao: Acao,
+    pub porta: u16,
 }
 
 /// Lê `--perfil <id>`, `--dispositivos` e `--revogar <id|todos>` (sem o nome do programa).
@@ -133,6 +143,7 @@ pub struct Opcoes {
 pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<Opcoes, String> {
     let mut id = XBOX_360.id.to_string();
     let mut acao = Acao::Servir;
+    let mut porta = PORTA_PADRAO;
     let definir_acao = |nova: Acao, atual: &mut Acao| -> Result<(), String> {
         if *atual != Acao::Servir {
             return Err(format!("use só uma ação por vez\n{}", uso()));
@@ -152,6 +163,10 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
             id = args.next().ok_or("--perfil precisa de um valor")?;
         } else if let Some(valor) = arg.strip_prefix("--perfil=") {
             id = valor.to_string();
+        } else if arg == "--porta" {
+            porta = ler_porta(&args.next().ok_or("--porta precisa de um número")?)?;
+        } else if let Some(valor) = arg.strip_prefix("--porta=") {
+            porta = ler_porta(valor)?;
         } else if arg == "--dispositivos" {
             definir_acao(Acao::ListarDispositivos, &mut acao)?;
         } else if arg == "--revogar" {
@@ -164,7 +179,7 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
         }
     }
     let perfil = Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))?;
-    Ok(Opcoes { perfil, acao })
+    Ok(Opcoes { perfil, acao, porta })
 }
 
 /// Posição do perfil em `PERFIS`, que é o número trocado com o celular.
@@ -175,7 +190,7 @@ pub fn indice_do_perfil(id: &str) -> Option<u8> {
 fn uso() -> String {
     let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
     format!(
-        "uso: vpad [--perfil <{}>]\n     vpad --dispositivos\n     vpad --revogar <id|todos>",
+        "uso: vpad [--perfil <{}>] [--porta <1-65535>]\n     vpad --dispositivos\n     vpad --revogar <id|todos>",
         ids.join("|")
     )
 }
@@ -325,5 +340,31 @@ mod testes {
     fn a_mensagem_de_uso_cita_as_novas_opcoes() {
         let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
         assert!(erro.contains("--dispositivos") && erro.contains("--revogar"), "{erro}");
+    }
+
+    #[test]
+    fn a_porta_padrao_e_8080() {
+        assert_eq!(opcoes_dos_argumentos(args(&[])).unwrap().porta, 8080);
+    }
+
+    #[test]
+    fn porta_separada_ou_com_igual() {
+        assert_eq!(opcoes_dos_argumentos(args(&["--porta", "9090"])).unwrap().porta, 9090);
+        assert_eq!(opcoes_dos_argumentos(args(&["--porta=18080"])).unwrap().porta, 18080);
+        assert_eq!(opcoes_dos_argumentos(args(&["--perfil", "ds4", "--porta", "9090"])).unwrap().porta, 9090);
+    }
+
+    #[test]
+    fn porta_invalida_e_erro() {
+        for ruim in ["0", "65536", "-1", "abc", "", "80 80"] {
+            assert!(opcoes_dos_argumentos(args(&["--porta", ruim])).is_err(), "{ruim:?}");
+        }
+        assert!(opcoes_dos_argumentos(args(&["--porta"])).is_err());
+    }
+
+    #[test]
+    fn a_mensagem_de_uso_cita_a_porta() {
+        let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
+        assert!(erro.contains("--porta"), "{erro}");
     }
 }
