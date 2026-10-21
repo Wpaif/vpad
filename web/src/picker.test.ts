@@ -29,7 +29,9 @@ describe("mountProfilePicker", () => {
 
   it("setCurrent marca o perfil ativo e habilita a escolha", () => {
     picker.setCurrent(1);
-    expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(["false", "true", "false"]);
+    expect(buttons().map((b) => b.getAttribute("aria-pressed"))).toEqual(
+      PROFILES.map((_, i) => String(i === 1)),
+    );
     expect(buttons().every((b) => !b.disabled)).toBe(true);
   });
 

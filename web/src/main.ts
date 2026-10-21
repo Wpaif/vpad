@@ -2,7 +2,9 @@ import "./style.css";
 import { connect } from "./connection";
 import { bindController } from "./controller";
 import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
-import { applyProfileLabels } from "./labels";
+import { mountKeyEditor } from "./editor";
+import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
+import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
 import { mountProfilePicker } from "./picker";
 import { PROFILES } from "./profiles";
@@ -31,6 +33,36 @@ const statusEl = document.getElementById("status")!;
 const statsEl = document.getElementById("stats")!;
 bindVisibilityToggle(document.getElementById("toggle")!, pad);
 
+// Rótulos dos botões: os do perfil ativo ou, no modo teclado, as teclas do mapa.
+let profileId: string | null = null;
+let keyboard: KeyboardConfig | null = null;
+
+function refreshLabels() {
+  if (profileId === null) return;
+  if (profileId !== "teclado") {
+    applyProfileLabels(pad, profileId);
+  } else if (keyboard) {
+    applyKeyboardLabels(pad, keyboard.mapa, keyboard.teclas);
+  } else {
+    loadKeyboard()
+      .then((config) => {
+        keyboard = config;
+        if (profileId === "teclado") refreshLabels();
+      })
+      .catch(() => {});
+  }
+}
+
+const editor = mountKeyEditor(document.getElementById("key-editor")!, {
+  load: () => loadKeyboard(),
+  save: (mapa) => saveKeyboard(mapa),
+  onSaved: (_mapa, config) => {
+    keyboard = config;
+    refreshLabels();
+  },
+});
+document.getElementById("open-key-editor")!.addEventListener("click", () => void editor.open());
+
 const picker = mountProfilePicker(document.getElementById("profile-picker")!, (i) => link.send(encodeProfile(i)));
 const meter = createLatencyMeter({ window: 30, timeoutMs: 2000 });
 
@@ -57,8 +89,8 @@ const link = connect({
   onPingSent: (ts) => meter.sent(ts),
   onProfile: (index) => {
     picker.setCurrent(index);
-    const profile = PROFILES[index];
-    if (profile) applyProfileLabels(pad, profile.id);
+    profileId = PROFILES[index]?.id ?? null;
+    refreshLabels();
   },
   onLatency: (_ms, sentAt) => {
     const ms = meter.received(sentAt, now());

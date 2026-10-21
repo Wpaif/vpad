@@ -16,11 +16,11 @@ pub struct EventoLinux {
 }
 
 impl EventoLinux {
-    fn tecla(codigo: KeyCode, valor: i32) -> Self {
+    pub(crate) fn tecla(codigo: KeyCode, valor: i32) -> Self {
         Self { tipo: EventType::KEY.0, codigo: codigo.0, valor }
     }
 
-    fn eixo(codigo: Abs, valor: i32) -> Self {
+    pub(crate) fn eixo(codigo: Abs, valor: i32) -> Self {
         Self { tipo: EventType::ABSOLUTE.0, codigo: codigo.0, valor }
     }
 }

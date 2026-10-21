@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
-import { applyProfileLabels } from "./labels";
+import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 
 let pad: HTMLElement;
 
@@ -138,5 +138,57 @@ describe("posição dos botões de face no HTML", () => {
     expect(el(".face .left").dataset.btn).toBe("X");
     expect(el(".face .right").dataset.btn).toBe("B");
     expect(el(".face .bottom").dataset.btn).toBe("A");
+  });
+});
+
+describe("modo teclado", () => {
+  const teclas = [
+    { id: "KeyK", rotulo: "K", grupo: "Letras" },
+    { id: "Space", rotulo: "Espaço", grupo: "Especiais" },
+    { id: "Tab", rotulo: "Tab", grupo: "Especiais" },
+    { id: "ArrowUp", rotulo: "↑", grupo: "Setas" },
+  ];
+  const mapa = { A: "KeyK", RB: "Space", Select: "Tab", RT: "ArrowUp" };
+
+  beforeEach(() => applyKeyboardLabels(pad, mapa, teclas));
+
+  it("mostra em cada botão a tecla que ele aciona", () => {
+    expect(text("[data-btn=A]")).toBe("K");
+    expect(text("[data-btn=RB]")).toBe("Espaço");
+    expect(text("[data-btn=Select]")).toBe("Tab");
+    expect(text("[data-trigger=RT]")).toBe("↑");
+  });
+
+  it("controle sem tecla mostra um traço", () => {
+    expect(text("[data-btn=B]")).toBe("–");
+    expect(text("[data-btn=Start]")).toBe("–");
+  });
+
+  it("tecla fora do catálogo mostra o próprio id", () => {
+    applyKeyboardLabels(pad, { A: "Desconhecida" }, teclas);
+    expect(text("[data-btn=A]")).toBe("Desconhecida");
+  });
+
+  it("marca o perfil e os rótulos de tecla para o CSS", () => {
+    expect(pad.dataset.profile).toBe("teclado");
+    expect(el("[data-btn=A]").hasAttribute("data-keycap")).toBe(true);
+  });
+
+  it("o nome acessível diz a tecla", () => {
+    expect(aria("[data-btn=RB]")).toBe("Tecla Espaço");
+    expect(aria("[data-btn=B]")).toBe("Sem tecla");
+  });
+
+  it("voltar a um perfil de controle limpa as marcas de tecla", () => {
+    applyProfileLabels(pad, "xbox360");
+    expect(el("[data-btn=A]").hasAttribute("data-keycap")).toBe(false);
+    expect(text("[data-btn=A]")).toBe("A");
+  });
+
+  it("não mexe nos ids do protocolo nem no direcional", () => {
+    const dpad = el(".dpad").innerHTML;
+    applyKeyboardLabels(pad, { Up: "KeyK" }, teclas);
+    expect(el(".dpad").innerHTML).toBe(dpad);
+    expect(el(".face .top").dataset.btn).toBe("Y");
   });
 });

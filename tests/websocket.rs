@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{
@@ -6,7 +6,7 @@ use tokio::sync::{
     watch,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use vpad::protocolo::Evento;
+use vpad::{armazem::ArmazemMapa, protocolo::Evento};
 
 type Cliente = tokio_tungstenite::WebSocketStream<
     tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
@@ -24,7 +24,9 @@ async fn servidor() -> Servidor {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}/ws", listener.local_addr().unwrap());
     tokio::spawn(async move {
-        axum::serve(listener, vpad::app_com(tx, perfil_rx)).await.unwrap()
+        axum::serve(listener, vpad::app_com(tx, perfil_rx, Arc::new(ArmazemMapa::em_memoria())))
+            .await
+            .unwrap()
     });
     Servidor { url, eventos, perfil }
 }

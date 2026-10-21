@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { bindPanelToggle, bindVisibilityToggle, renderStats, renderStatus } from "./ui";
+import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderStats, renderStatus } from "./ui";
 
 beforeEach(() => {
   document.body.innerHTML = `
@@ -107,5 +107,26 @@ describe("painel de latência", () => {
     status.click();
     status.click();
     expect(calls).toEqual([true, false]);
+  });
+});
+
+describe("lockGestures", () => {
+  function tocar(alvo: Element): TouchEvent {
+    const e = new Event("touchmove", { bubbles: true, cancelable: true }) as TouchEvent;
+    alvo.dispatchEvent(e);
+    return e;
+  }
+
+  it("bloqueia o arrasto na página, para ela não rolar nem dar zoom", () => {
+    document.body.innerHTML = `<main id="pad"></main>`;
+    lockGestures();
+    expect(tocar(document.getElementById("pad")!).defaultPrevented).toBe(true);
+  });
+
+  it("deixa rolar dentro de uma área marcada com data-scroll (editor de teclas)", () => {
+    document.body.innerHTML = `<div data-scroll><p id="dentro"></p></div><p id="fora"></p>`;
+    lockGestures();
+    expect(tocar(document.getElementById("dentro")!).defaultPrevented).toBe(false);
+    expect(tocar(document.getElementById("fora")!).defaultPrevented).toBe(true);
   });
 });

@@ -227,7 +227,7 @@ button[data-pressed] {
   top: calc(max(10px, env(safe-area-inset-top)) + 40px);
   left: 50%;
   translate: -50% 0;
-  width: 220px;
+  width: 240px;
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
@@ -277,7 +277,8 @@ button[data-pressed] {
   --face-right: #f87171;
   --face-bottom: #60a5fa;
 }
-#pad[data-profile="switch-pro"] {
+#pad[data-profile="switch-pro"],
+#pad[data-profile="teclado"] {
   --face-top: var(--text);
   --face-left: var(--text);
   --face-right: var(--text);
@@ -313,3 +314,68 @@ button[data-pressed] {
 }
 .picker button[data-pending] { animation: pulse 0.8s ease-in-out infinite; }
 .picker button:disabled { opacity: 0.4; }
+
+.picker button { font-size: 10.5px; }
+.link {
+  margin-top: 8px;
+  width: 100%;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 11px;
+  background: transparent;
+}
+
+/* botões que mostram uma tecla (modo teclado) */
+[data-keycap] { font-size: 13px; letter-spacing: 0; text-transform: none; }
+.face [data-keycap] { font-size: 13px; font-weight: 700; }
+
+/* editor de teclas */
+[data-scroll], [data-scroll] * { touch-action: pan-y; }
+.editor, .key-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgb(11 13 18 / 0.98);
+}
+.editor { position: fixed; inset: 0; z-index: 20; }
+.key-picker { position: absolute; inset: 0; z-index: 1; }
+.editor[hidden], .key-picker[hidden] { display: none; }
+.editor-bar { display: flex; align-items: center; gap: 8px; }
+.editor-bar h2 { margin: 0 auto 0 0; font-size: 14px; font-weight: 600; }
+.editor-bar button { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 12px; }
+.editor-status { min-height: 16px; margin: 2px 0; font-size: 12px; opacity: 0.8; }
+.editor-body, .picker-keys { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.editor-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 14px;
+  align-content: start;
+}
+.editor-body section { display: grid; gap: 4px; align-content: start; }
+.editor h3, .editor h4 {
+  margin: 4px 0 2px;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.row { display: flex; justify-content: space-between; align-items: center; height: 34px; padding: 0 10px; border-radius: 9px; font-size: 12px; }
+.row kbd {
+  min-width: 28px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgb(255 255 255 / 0.1);
+  font: 600 12px ui-monospace, monospace;
+  text-align: center;
+}
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+.keys button { height: 34px; padding: 0 4px; border-radius: 8px; font-size: 12px; }
+.keys button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent);
+}
+.editor-body, .picker-keys { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.3) transparent; }

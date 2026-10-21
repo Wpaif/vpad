@@ -6,4 +6,5 @@ export const PROFILES = [
   { id: "xbox360", label: "Xbox 360", short: "Xbox" },
   { id: "ds4", label: "DualShock 4", short: "PS4" },
   { id: "switch-pro", label: "Switch Pro", short: "Switch" },
+  { id: "teclado", label: "Teclado", short: "Teclado" },
 ] as const;
