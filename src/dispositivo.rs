@@ -12,6 +12,7 @@ use crate::{
     mapeamento::{EIXOS, Tradutor, eixos_do_perfil, teclas_do_perfil},
     perfil::{Faixa, Perfil, XBOX_360},
     protocolo::Evento,
+    servico::Dispositivo,
 };
 
 pub struct Gamepad {
@@ -79,5 +80,11 @@ impl Gamepad {
             return Ok(());
         }
         self.dispositivo.emit(&eventos)
+    }
+}
+
+impl Dispositivo for Gamepad {
+    fn aplicar(&mut self, evento: Evento) -> io::Result<()> {
+        Gamepad::aplicar(self, evento)
     }
 }

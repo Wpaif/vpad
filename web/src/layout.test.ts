@@ -17,3 +17,11 @@ describe("barra superior", () => {
     expect(document.getElementById("pad")!.contains(document.querySelector(".topbar"))).toBe(false);
   });
 });
+
+describe("seletor de perfil", () => {
+  it("fica dentro do painel que só abre ao tocar no indicador, sem ocupar espaço fixo", () => {
+    const picker = document.getElementById("profile-picker");
+    expect(picker).not.toBeNull();
+    expect(document.getElementById("stats")!.contains(picker)).toBe(true);
+  });
+});

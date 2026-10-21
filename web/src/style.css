@@ -216,7 +216,7 @@ button[data-pressed] {
   padding: 12px 14px;
   border-radius: 16px;
   border: 1px solid var(--border);
-  background: rgb(15 18 28 / 0.72);
+  background: rgb(15 18 28 / 0.94);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   font-size: 12px;
@@ -268,3 +268,20 @@ button[data-pressed] {
   font: 11px/1.35 ui-monospace, monospace;
   pointer-events: none;
 }
+
+.picker-row { margin-bottom: 10px; }
+.label { display: block; margin-bottom: 4px; opacity: 0.55; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.picker { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.picker button {
+  height: 30px;
+  padding: 0 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.picker button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: var(--accent);
+}
+.picker button[data-pending] { animation: pulse 0.8s ease-in-out infinite; }
+.picker button:disabled { opacity: 0.4; }
