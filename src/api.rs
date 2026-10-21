@@ -22,22 +22,28 @@ use crate::{
 };
 
 /// O token vem em `Authorization: Bearer <token>`.
-fn autorizado(estado: &Estado, headers: &HeaderMap) -> bool {
-    headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .is_some_and(|token| estado.acesso.autorizado(token))
+fn token_do_cabecalho(headers: &HeaderMap) -> Option<&str> {
+    headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer "))
 }
 
-fn nao_autorizado() -> Response {
-    erro(StatusCode::UNAUTHORIZED, "não autorizado")
+/// Confere o token e exige a permissão do modo teclado: ler e mudar as teclas é coisa de quem
+/// pode digitar no PC. Devolve a resposta de erro pronta se não passar.
+fn exigir_teclado(estado: &Estado, headers: &HeaderMap) -> Result<(), Response> {
+    let permissoes = token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t));
+    match permissoes {
+        None => Err(erro(StatusCode::UNAUTHORIZED, "não autorizado")),
+        Some(p) if !p.teclado => Err(erro(
+            StatusCode::FORBIDDEN,
+            "este aparelho não tem permissão para o modo teclado: libere no PC com vpad --permitir-teclado <id>",
+        )),
+        Some(_) => Ok(()),
+    }
 }
 
 /// Mapa atual, o padrão, a lista de controles (na ordem da página) e o catálogo de teclas.
 pub(crate) async fn obter(State(estado): State<Estado>, headers: HeaderMap) -> Response {
-    if !autorizado(&estado, &headers) {
-        return nao_autorizado();
+    if let Err(resposta) = exigir_teclado(&estado, &headers) {
+        return resposta;
     }
     let teclas: Vec<_> = TECLAS
         .iter()
@@ -67,8 +73,8 @@ pub(crate) async fn definir(
     headers: HeaderMap,
     Json(pedido): Json<Pedido>,
 ) -> Response {
-    if !autorizado(&estado, &headers) {
-        return nao_autorizado();
+    if let Err(resposta) = exigir_teclado(&estado, &headers) {
+        return resposta;
     }
     let mapa = match Mapa::de_json(&pedido.mapa) {
         Ok(m) => m,

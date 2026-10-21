@@ -7,7 +7,7 @@ use std::{io, net::IpAddr, sync::Arc, time::Duration};
 use crate::{
     alerta::{Alerta, Alertas, ignorar},
     aprovacao::{Aprovacoes, Decisao, Ocupado, Pedido, Tipo},
-    dispositivos::{Dispositivos, Pareado, limpar_nome},
+    dispositivos::{Dispositivos, Pareado, Permissoes, limpar_nome},
     pareamento::{MAX_ERROS, Pareamento, Resultado},
 };
 
@@ -108,6 +108,16 @@ impl Acesso {
 
     pub fn autorizado(&self, token: &str) -> bool {
         self.dispositivos.autorizado(token)
+    }
+
+    /// As permissões do aparelho dono do token, ou nada se ele não for pareado.
+    pub fn permissoes(&self, token: &str) -> Option<Permissoes> {
+        self.dispositivos.consultar(token)
+    }
+
+    /// Quanto tempo o PC espera por uma confirmação antes de desistir.
+    pub fn prazo_da_aprovacao(&self) -> Duration {
+        self.prazo_da_aprovacao
     }
 
     /// Troca o código digitado por um token novo, exclusivo do aparelho, **depois que quem

@@ -18,6 +18,13 @@ use crate::pareamento::iguais;
 const NOME_PADRAO: &str = "dispositivo";
 const NOME_MAXIMO: usize = 40;
 
+/// O que um aparelho pareado pode fazer além de controlar jogos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Permissoes {
+    /// usar o modo teclado, que digita no PC
+    pub teclado: bool,
+}
+
 /// O que se pode mostrar de um dispositivo pareado (nunca o token nem o hash).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Registro {
@@ -137,6 +144,25 @@ impl Dispositivos {
         let lista = self.lista.lock().unwrap();
         // percorre todos, sem parar no primeiro, para o tempo não revelar a posição
         lista.iter().fold(false, |achou, g| iguais(&g.hash, &candidato) | achou)
+    }
+
+    /// Uma consulta só: o token é de um aparelho pareado? Se for, quais as permissões dele.
+    pub fn consultar(&self, token: &str) -> Option<Permissoes> {
+        self.identificar(token).map(|r| Permissoes { teclado: r.teclado })
+    }
+
+    /// O aparelho dono deste token (id, nome, permissões), se for de um aparelho pareado.
+    pub fn identificar(&self, token: &str) -> Option<Registro> {
+        let candidato = hash_do_token(token);
+        let lista = self.lista.lock().unwrap();
+        // percorre todos, sem parar no primeiro, para o tempo não revelar a posição
+        lista.iter().fold(None, |achado, g| {
+            if iguais(&g.hash, &candidato) {
+                Some(Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado, teclado: g.teclado })
+            } else {
+                achado
+            }
+        })
     }
 
     /// O aparelho dono deste token pode usar o modo teclado? Token desconhecido: não.
@@ -555,5 +581,37 @@ mod testes {
         fs::write(pasta.arquivo().parent().unwrap(), "x").unwrap();
         assert!(d.definir_teclado(&p.id, true).is_err());
         assert!(!d.teclado_permitido(&p.token));
+    }
+
+    // ---------- consulta única (autorizado + permissões) ----------
+
+    #[test]
+    fn consultar_devolve_as_permissoes_do_aparelho_ou_nada_se_nao_for_pareado() {
+        let d = Dispositivos::em_memoria();
+        let sem = d.parear("iPad", 1000).unwrap();
+        let com = d.parear_com("iPhone", 1001, true).unwrap();
+        assert_eq!(d.consultar(&sem.token), Some(Permissoes { teclado: false }));
+        assert_eq!(d.consultar(&com.token), Some(Permissoes { teclado: true }));
+        assert_eq!(d.consultar("errado"), None);
+        assert_eq!(d.consultar(""), None);
+    }
+
+    #[test]
+    fn consultar_acompanha_a_revogacao_e_a_mudanca_de_permissao() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone", 1000, true).unwrap();
+        d.definir_teclado(&p.id, false).unwrap();
+        assert_eq!(d.consultar(&p.token), Some(Permissoes { teclado: false }));
+        d.revogar(&p.id).unwrap();
+        assert_eq!(d.consultar(&p.token), None);
+    }
+
+    #[test]
+    fn identificar_devolve_id_e_nome_so_para_tokens_pareados() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone do Wilian", 1000, true).unwrap();
+        let r = d.identificar(&p.token).unwrap();
+        assert_eq!((r.id.as_str(), r.nome.as_str(), r.teclado), (p.id.as_str(), "iPhone do Wilian", true));
+        assert!(d.identificar("errado").is_none());
     }
 }

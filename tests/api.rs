@@ -42,7 +42,8 @@ fn ambiente_completo(armazem: Arc<ArmazemMapa>, prazo_da_aprovacao: Duration) ->
         prazo_da_aprovacao,
     );
     // o pareamento nasce fechado; os testes que pareiam o abrem
-    let token = acesso.dispositivos().parear("teste", 0).unwrap().token;
+    // o aparelho de teste já tem a permissão do modo teclado
+    let token = acesso.dispositivos().parear_com("teste", 0, true).unwrap().token;
     let app = vpad::app_com(mpsc::unbounded_channel().0, watch::channel(0).1, armazem.clone(), acesso.clone());
     Ambiente { app, acesso, armazem, token, alertas }
 }
@@ -263,7 +264,8 @@ fn codigo_errado(a: &Ambiente) -> String {
 #[tokio::test]
 async fn o_codigo_certo_aprovado_no_pc_devolve_um_token_exclusivo_que_abre_a_api() {
     let a = ambiente();
-    let (status, _, corpo) = parear_aprovado(&a, &codigo_certo(&a), Some("iPhone do Wilian")).await;
+    let (status, _, corpo) =
+        parear_e_responder(&a, &codigo_certo(&a), Some("iPhone do Wilian"), Decisao::Aprovado { teclado: true }).await;
     assert_eq!(status, StatusCode::OK);
 
     let token = corpo["token"].as_str().unwrap().to_string();
@@ -273,10 +275,21 @@ async fn o_codigo_certo_aprovado_no_pc_devolve_um_token_exclusivo_que_abre_a_api
     assert_ne!(token, a.token, "cada aparelho tem o seu");
 
     let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&format!("Bearer {token}"))).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "foi aprovado com a permissão do modo teclado");
 
     let nomes: Vec<_> = a.acesso.dispositivos().listar().into_iter().map(|d| d.nome).collect();
     assert!(nomes.contains(&"iPhone do Wilian".to_string()));
+}
+
+#[tokio::test]
+async fn aparelho_aprovado_sem_teclado_esta_pareado_mas_nao_acessa_o_mapa_de_teclas() {
+    let a = ambiente();
+    let (status, _, corpo) = parear_aprovado(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = corpo["token"].as_str().unwrap();
+    assert!(a.acesso.autorizado(token));
+    let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&format!("Bearer {token}"))).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]
@@ -482,4 +495,38 @@ async fn tentativa_com_o_pareamento_fechado_tambem_gera_alerta() {
     let a = ambiente();
     parear_sem_abrir(&a, &codigo_certo(&a), None).await;
     assert_eq!(*a.alertas.lock().unwrap(), vec![Alerta::PareamentoFechado { origem: None }]);
+}
+
+// ---------- a API do teclado exige a permissão do modo teclado ----------
+
+#[tokio::test]
+async fn aparelho_sem_permissao_de_teclado_nao_le_nem_grava_o_mapa() {
+    let a = ambiente();
+    let sem = a.acesso.dispositivos().parear("iPad", 0).unwrap().token;
+    let auth = format!("Bearer {sem}");
+
+    let (status, _, corpo) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&auth)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("teclado"));
+
+    let p = pedido(json!({"A": "Space"}));
+    let (status, _, _) = chamar_com(&a.app, "PUT", "/api/teclado", Some(&p), Some(&auth)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(*a.armazem.atual(), Mapa::padrao());
+}
+
+#[tokio::test]
+async fn token_invalido_continua_401_e_nao_403() {
+    let a = ambiente();
+    let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some("Bearer errado")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn permissao_tirada_vale_na_proxima_chamada() {
+    let a = ambiente();
+    let id = a.acesso.dispositivos().listar()[0].id.clone();
+    assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::OK);
+    a.acesso.dispositivos().definir_teclado(&id, false).unwrap();
+    assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::FORBIDDEN);
 }
