@@ -1,4 +1,5 @@
 import type { LatencySnapshot } from "./latency";
+import type { Refusal } from "./protocol";
 import { sparklinePoints } from "./sparkline";
 
 export function bindVisibilityToggle(toggle: HTMLElement, pad: HTMLElement): void {
@@ -61,4 +62,21 @@ export function bindPanelToggle(trigger: HTMLElement, panel: HTMLElement, onChan
     panel.hidden = !panel.hidden;
     onChange?.(!panel.hidden);
   });
+}
+
+const GATE_MESSAGES: Record<Refusal, string> = {
+  busy: "Outro aparelho está controlando o PC. Desconecte-o (ou espere ele sair) e tente de novo.",
+  unauthorized: "Acesso não autorizado. Escaneie o QR code mostrado no terminal do PC para abrir esta página.",
+};
+
+/** Mostra por que o servidor recusou este aparelho; null esconde a tela. */
+export function renderGate(gate: HTMLElement, reason: Refusal | null): void {
+  gate.hidden = reason === null;
+  if (reason === null) {
+    delete gate.dataset.reason;
+    return;
+  }
+  gate.dataset.reason = reason;
+  const message = gate.querySelector("[data-role=message]");
+  if (message) message.textContent = GATE_MESSAGES[reason];
 }

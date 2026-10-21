@@ -191,3 +191,56 @@ describe("aviso de perfil", () => {
     expect(latencies).toEqual([]);
   });
 });
+
+describe("recusa do servidor", () => {
+  function iniciar() {
+    const motivos: string[] = [];
+    const c = connect({
+      url: "ws://pc/ws",
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: (s) => statuses.push(s),
+      onLatency: () => {},
+      onRefused: (m) => motivos.push(m),
+      pingEveryMs: 1000,
+      now: () => Date.now(),
+    });
+    return { c, motivos };
+  }
+
+  it("avisa o motivo e não tenta reconectar quando o servidor fecha em seguida", () => {
+    const { motivos } = iniciar();
+    last().open();
+    last().receive(Uint8Array.of(5, 1));
+    last().close();
+    vi.advanceTimersByTime(60_000);
+
+    expect(motivos).toEqual(["busy"]);
+    expect(FakeSocket.instances.length).toBe(1);
+    expect(statuses.at(-1)).toBe("closed");
+  });
+
+  it("não autorizado também para de tentar", () => {
+    const { motivos } = iniciar();
+    last().open();
+    last().receive(Uint8Array.of(5, 2));
+    last().close();
+    vi.advanceTimersByTime(60_000);
+    expect(motivos).toEqual(["unauthorized"]);
+    expect(FakeSocket.instances.length).toBe(1);
+  });
+
+  it("depois de recusado não manda mais ping", () => {
+    iniciar();
+    last().open();
+    last().receive(Uint8Array.of(5, 1));
+    vi.advanceTimersByTime(3000);
+    expect(last().sent).toEqual([]);
+  });
+
+  it("send não envia nada depois da recusa", () => {
+    const { c } = iniciar();
+    last().open();
+    last().receive(Uint8Array.of(5, 1));
+    expect(c.send(Uint8Array.of(1, 0, 1))).toBe(false);
+  });
+});

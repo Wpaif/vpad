@@ -40,3 +40,14 @@ describe("editor de teclas", () => {
     expect(document.getElementById("pad")!.contains(editor)).toBe(false);
   });
 });
+
+describe("tela de acesso recusado no HTML", () => {
+  it("existe, começa escondida, fora do controle e tem o botão de tentar de novo", () => {
+    const gate = document.getElementById("gate")!;
+    expect(gate.hidden).toBe(true);
+    expect(gate.getAttribute("role")).toBe("alertdialog");
+    expect(document.getElementById("pad")!.contains(gate)).toBe(false);
+    expect(gate.querySelector("[data-role=message]")).not.toBeNull();
+    expect(document.getElementById("gate-retry")).not.toBeNull();
+  });
+});

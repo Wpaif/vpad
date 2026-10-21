@@ -11,6 +11,7 @@ const MSG_BUTTON = 1;
 const MSG_AXIS = 2;
 const MSG_PING = 3;
 const MSG_PROFILE = 4;
+const MSG_REFUSAL = 5;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -48,4 +49,12 @@ export function encodeProfile(index: number): Uint8Array<ArrayBuffer> {
 /** Índice do perfil que o servidor informa estar ativo, ou null se não for esse tipo de mensagem. */
 export function decodeProfile(data: Uint8Array): number | null {
   return data.length === 2 && data[0] === MSG_PROFILE ? data[1]! : null;
+}
+
+export type Refusal = "busy" | "unauthorized";
+
+/** Motivo pelo qual o servidor recusou a conexão, ou null se a mensagem for outra. */
+export function decodeRefusal(data: Uint8Array): Refusal | null {
+  if (data.length !== 2 || data[0] !== MSG_REFUSAL) return null;
+  return data[1] === 1 ? "busy" : data[1] === 2 ? "unauthorized" : null;
 }

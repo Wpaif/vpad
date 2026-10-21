@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Axis, Button, decodeProfile, encodeAxis, encodeButton, encodePing, encodeProfile } from "./protocol";
+import { Axis, Button, decodeProfile, decodeRefusal, encodeAxis, encodeButton, encodePing, encodeProfile } from "./protocol";
 
 describe("protocol", () => {
   it("codifica botão pressionado e solto", () => {
@@ -45,5 +45,16 @@ describe("protocol", () => {
     expect(decodeProfile(Uint8Array.of(3, 1))).toBeNull();
     expect(decodeProfile(Uint8Array.of(4))).toBeNull();
     expect(decodeProfile(Uint8Array.of(4, 1, 1))).toBeNull();
+  });
+
+  it("decodifica o motivo de recusa do servidor", () => {
+    expect(decodeRefusal(Uint8Array.of(5, 1))).toBe("busy");
+    expect(decodeRefusal(Uint8Array.of(5, 2))).toBe("unauthorized");
+  });
+
+  it("ignora o que não é recusa", () => {
+    expect(decodeRefusal(Uint8Array.of(5, 9))).toBeNull();
+    expect(decodeRefusal(Uint8Array.of(4, 1))).toBeNull();
+    expect(decodeRefusal(Uint8Array.of(5))).toBeNull();
   });
 });

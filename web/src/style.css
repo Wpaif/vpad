@@ -379,3 +379,18 @@ button[data-pressed] {
   border-color: var(--accent);
 }
 .editor-body, .picker-keys { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.3) transparent; }
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.gate[hidden] { display: none; }
+.gate-box { display: grid; gap: 16px; max-width: 420px; text-align: center; }
+.gate-box p { margin: 0; font-size: 16px; line-height: 1.5; }
+.gate-box button { height: 40px; border-radius: 12px; font-size: 14px; }
+.gate[data-reason="busy"] .gate-box p::before { content: "🔒 "; }

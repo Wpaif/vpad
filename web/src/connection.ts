@@ -1,4 +1,4 @@
-import { decodePing, decodeProfile, encodePing } from "./protocol";
+import { decodePing, decodeProfile, decodeRefusal, encodePing, type Refusal } from "./protocol";
 
 export type Status = "connecting" | "open" | "reconnecting" | "closed";
 
@@ -9,6 +9,8 @@ export interface Options {
   onPingSent?: (ts: number) => void;
   /** Índice do perfil ativo no servidor, avisado ao conectar e a cada troca. */
   onProfile?: (index: number) => void;
+  /** O servidor recusou (outro aparelho controlando, ou token errado): não adianta reconectar. */
+  onRefused?: (reason: Refusal) => void;
   WebSocketImpl?: typeof WebSocket;
   pingEveryMs?: number;
   now?: () => number;
@@ -56,7 +58,18 @@ export function connect(opts: Options): Connection {
         return;
       }
       const profile = decodeProfile(data);
-      if (profile !== null) opts.onProfile?.(profile);
+      if (profile !== null) {
+        opts.onProfile?.(profile);
+        return;
+      }
+      const refusal = decodeRefusal(data);
+      if (refusal !== null) {
+        stopped = true;
+        clearInterval(pingTimer);
+        opts.onStatus("closed");
+        opts.onRefused?.(refusal);
+        ws.close();
+      }
     };
     ws.onclose = () => {
       if (ws !== socket) return;
@@ -75,7 +88,7 @@ export function connect(opts: Options): Connection {
 
   return {
     send(msg) {
-      if (socket?.readyState !== OPEN) return false;
+      if (stopped || socket?.readyState !== OPEN) return false;
       socket.send(msg);
       return true;
     },
