@@ -83,6 +83,15 @@ async fn main() -> io::Result<()> {
             eprintln!("nenhum dispositivo com o id {id} (veja os ids com: vpad --dispositivos)");
             std::process::exit(1);
         }
+        Acao::Teclado { id, permitir } => {
+            if dispositivos.definir_teclado(&id, permitir)? {
+                let estado = if permitir { "liberado" } else { "bloqueado" };
+                println!("modo teclado {estado} para o dispositivo {id}");
+                return Ok(());
+            }
+            eprintln!("nenhum dispositivo com o id {id} (veja os ids com: vpad --dispositivos)");
+            std::process::exit(1);
+        }
         Acao::Servir => {}
     }
 

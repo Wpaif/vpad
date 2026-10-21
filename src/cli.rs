@@ -44,9 +44,10 @@ pub fn tabela_de_dispositivos(lista: &[Registro]) -> String {
             .to_string();
     }
     let largura = lista.iter().map(|d| d.nome.chars().count()).max().unwrap_or(0).max(4);
-    let mut linhas = vec![format!("{:<8}  {:<largura$}  PAREADO EM (UTC)", "ID", "NOME")];
+    let mut linhas = vec![format!("{:<8}  {:<largura$}  {:<16}  TECLADO", "ID", "NOME", "PAREADO EM (UTC)")];
     for d in lista {
-        linhas.push(format!("{:<8}  {:<largura$}  {}", d.id, d.nome, data_utc(d.criado)));
+        let teclado = if d.teclado { "sim" } else { "não" };
+        linhas.push(format!("{:<8}  {:<largura$}  {:<16}  {teclado}", d.id, d.nome, data_utc(d.criado)));
     }
     linhas.join("\n")
 }
@@ -87,13 +88,26 @@ mod testes {
     #[test]
     fn tabela_de_dispositivos_lista_id_nome_e_data() {
         let lista = vec![
-            Registro { id: "ab12cd34".into(), nome: "iPhone do Wilian".into(), criado: 1_700_000_000 },
-            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0 },
+            Registro { id: "ab12cd34".into(), nome: "iPhone do Wilian".into(), criado: 1_700_000_000, teclado: true },
+            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false },
         ];
         let t = tabela_de_dispositivos(&lista);
         assert!(t.contains("ab12cd34") && t.contains("iPhone do Wilian") && t.contains("2023-11-14 22:13"), "{t}");
         assert!(t.contains("ef56ab78") && t.contains("iPad"), "{t}");
         assert!(t.lines().count() >= 3, "cabeçalho e uma linha por aparelho");
+    }
+
+    #[test]
+    fn a_tabela_mostra_quem_pode_usar_o_modo_teclado() {
+        let lista = vec![
+            Registro { id: "ab12cd34".into(), nome: "iPhone".into(), criado: 0, teclado: true },
+            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false },
+        ];
+        let t = tabela_de_dispositivos(&lista);
+        assert!(t.lines().next().unwrap().contains("TECLADO"), "{t}");
+        let linha = |id: &str| t.lines().find(|l| l.starts_with(id)).unwrap().to_string();
+        assert!(linha("ab12cd34").trim_end().ends_with("sim"), "{t}");
+        assert!(linha("ef56ab78").trim_end().ends_with("não"), "{t}");
     }
 
     #[test]
