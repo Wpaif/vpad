@@ -1,10 +1,22 @@
 import "./style.css";
 import { connect } from "./connection";
 import { bindController } from "./controller";
+import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
 import { createLatencyMeter } from "./latency";
 import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderStats, renderStatus } from "./ui";
 
 lockGestures();
+enterFullscreenOnTouch(document);
+
+const standalone =
+  (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+  matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches;
+bindInstallHint(
+  document.getElementById("install-hint")!,
+  document.getElementById("install-hint-close")!,
+  { standalone, fullscreenEnabled: document.fullscreenEnabled === true },
+  localStorage,
+);
 
 const now = () => performance.timeOrigin + performance.now();
 const pad = document.getElementById("pad")!;

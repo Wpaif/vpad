@@ -9,8 +9,8 @@
   --b: #f87171;
   --x: #60a5fa;
   --y: #fbbf24;
-  --btn: clamp(56px, 17dvh, 84px);
-  --stick: clamp(110px, 38dvh, 170px);
+  --btn: clamp(38px, min(17dvh, 7.5vw), 80px);
+  --stick: clamp(80px, min(36dvh, 15vw), 160px);
   --gap: 12px;
   font-family: -apple-system, system-ui, "Segoe UI", sans-serif;
   color-scheme: dark;
@@ -46,10 +46,21 @@ html, body {
 #pad[data-hidden] { opacity: 0; pointer-events: none; }
 
 .zone { display: grid; gap: var(--gap); }
-.zone.left, .zone.right { grid-template-rows: auto 1fr auto; align-items: center; }
-.zone.left { justify-items: start; }
-.zone.right { justify-items: end; }
-.zone.center { align-self: end; display: flex; padding-bottom: 8px; }
+.zone.left, .zone.right {
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "sh sh" "a b";
+  grid-auto-columns: auto;
+  min-height: 0;
+}
+.zone.left { grid-template-areas: "sh sh" "stick dpad"; justify-content: start; }
+.zone.right { grid-template-areas: "sh sh" "stick face"; justify-content: end; }
+.zone.center { align-self: end; display: flex; flex-direction: column; align-items: stretch; width: 88px; padding-bottom: 8px; }
+
+.shoulders { grid-area: sh; }
+.zone.left .stick { grid-area: stick; align-self: start; }
+.zone.left .dpad { grid-area: dpad; align-self: end; }
+.zone.right .face { grid-area: face; align-self: start; }
+.zone.right .stick { grid-area: stick; align-self: end; }
 
 .shoulders { display: flex; gap: var(--gap); }
 .zone.right .shoulders { justify-self: end; }
@@ -76,8 +87,8 @@ button[data-pressed] {
   letter-spacing: 0.08em;
 }
 .pill {
-  height: 36px;
-  padding: 0 18px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: 999px;
   font-size: 12px;
   text-transform: uppercase;
@@ -208,3 +219,31 @@ button[data-pressed] {
 .stats dd { margin: 2px 0 0; font-variant-numeric: tabular-nums; font-weight: 600; }
 .spark { width: 100%; height: 32px; margin-top: 10px; }
 .spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+
+.hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: min(250px, 30vw);
+  padding: 12px 34px 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgb(15 18 28 / 0.8);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.hint[hidden] { display: none; }
+.hint p { margin: 0; }
+.hint button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  padding: 0;
+  line-height: 1;
+}

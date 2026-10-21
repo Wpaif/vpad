@@ -38,3 +38,24 @@ async fn serve_assets_com_o_content_type_correto() {
         .unwrap()
         .starts_with("text/html"));
 }
+
+#[tokio::test]
+async fn serve_o_manifest_do_pwa_em_tela_cheia() {
+    let res = get("/manifest.webmanifest").await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(res.headers()[header::CONTENT_TYPE]
+        .to_str()
+        .unwrap()
+        .starts_with("application/manifest+json"));
+    let body = res.into_body().collect().await.unwrap().to_bytes();
+    let texto = String::from_utf8_lossy(&body);
+    assert!(texto.contains("\"display\": \"fullscreen\""));
+    assert!(texto.contains("\"orientation\": \"landscape\""));
+}
+
+#[tokio::test]
+async fn serve_o_icone_para_a_tela_inicial_do_iphone() {
+    let res = get("/apple-touch-icon.png").await;
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
+}
