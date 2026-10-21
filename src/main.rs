@@ -1,6 +1,6 @@
 use std::{
     io::{self, Write},
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -9,8 +9,9 @@ use tokio::sync::{mpsc, watch};
 use vpad::{
     acesso::Acesso,
     armazem::{ArmazemMapa, caminho_da_config},
-    cli::{linha_do_codigo, tabela_de_dispositivos},
-    configuracao::{self, Configuracao},
+    cli::tabela_de_dispositivos,
+    configuracao::{Configuracao, ServidorDeConfiguracao},
+    console::{Console, DURACAO_DA_CONFIGURACAO, DURACAO_DO_PAREAMENTO, Saida},
     convite::{qr_em_texto, url_de_configuracao, url_do_controle},
     dispositivo::{Gamepad, Teclado},
     dispositivos::{Dispositivos, caminho_dos_dispositivos},
@@ -39,6 +40,17 @@ fn ips_da_rede() -> Vec<IpAddr> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// Mostra o que o console mandou: linhas permanentes ou a linha do código que se reescreve.
+fn imprimir(saidas: Vec<Saida>) {
+    for saida in saidas {
+        match saida {
+            Saida::Linha(texto) => println!("\r\x1b[2K{texto}"),
+            Saida::Atualiza(texto) => print!("{texto}"),
+        }
+    }
+    let _ = io::stdout().flush();
 }
 
 fn agora() -> u64 {
@@ -95,7 +107,15 @@ async fn main() -> io::Result<()> {
         Acao::Servir => {}
     }
 
-    let acesso = Acesso::novo(dispositivos, Pareamento::novo()?, INATIVIDADE);
+    // Alertas de segurança vão para o terminal (limpando antes a linha do código que gira).
+    let acesso = Acesso::com_alertas(
+        dispositivos,
+        Pareamento::novo()?,
+        INATIVIDADE,
+        Arc::new(|alerta| {
+            println!("\r\x1b[2K{alerta}");
+        }),
+    );
 
     let armazem = Arc::new(match caminho_da_config(xdg.as_deref(), home.as_deref()) {
         Some(arquivo) => {
@@ -144,27 +164,22 @@ async fn main() -> io::Result<()> {
     let material = carregar_ou_criar(&pasta_tls, &ips, agora())?;
     let tls_config = config_do_servidor(&material)?;
 
-    // Porta HTTP: só entrega o certificado e as instruções. O controle fica no HTTPS.
-    let listener_http = tokio::net::TcpListener::bind(("0.0.0.0", porta)).await?;
+    // A página que entrega o certificado (HTTP simples) só abre quando o dono do PC pede.
     let configuracao = Arc::new(Configuracao {
         ca_der: material.ca_der.clone(),
         ca_pem: material.ca_pem.clone(),
         nome_do_pc: nome_do_computador(),
         porta_https,
     });
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener_http, configuracao::rotas(configuracao)).await {
-            eprintln!("erro na página de configuração: {e}");
-        }
-    });
+    let servidor_de_configuracao = ServidorDeConfiguracao::novo(SocketAddr::from(([0, 0, 0, 0], porta)), configuracao);
     let listener_https = tokio::net::TcpListener::bind(("0.0.0.0", porta_https)).await?;
 
     let ip = local_ip_address::local_ip().map(|i| i.to_string()).unwrap_or_else(|_| "IP_DO_PC".into());
     let url = url_do_controle(&ip, porta_https);
+    let url_config = url_de_configuracao(&ip, porta);
     println!("{}", qr_em_texto(&url));
     println!("perfil: {} ({:04x}:{:04x})", perfil.nome, perfil.fabricante, perfil.produto);
     println!("controle (HTTPS): {url}");
-    println!("primeira vez neste celular? instale o certificado: {}", url_de_configuracao(&ip, porta));
     if material.ca_antiga_sem_restricoes {
         println!("AUTORIDADE ANTIGA (sem restrição de nomes) SUBSTITUÍDA por uma que só vale para a rede local:");
         println!("remova o perfil vpad antigo do celular e instale o novo");
@@ -182,19 +197,42 @@ async fn main() -> io::Result<()> {
     let cobertos: Vec<String> = ips.iter().filter(|i| !material.ips_ignorados.contains(i)).map(ToString::to_string).collect();
     println!("certificado válido para: {}", cobertos.join(", "));
     println!("aparelhos pareados: {} (veja com: vpad --dispositivos)", acesso.dispositivos().listar().len());
-    println!("para parear um aparelho novo, digite no celular o código abaixo:\n");
 
-    // O código de pareamento muda a cada 30 s; esta linha é reescrita a cada segundo.
-    let para_mostrar = acesso.clone();
+    // Primeira instalação do certificado: abre a página de configuração por um tempo.
+    if material.ca_nova {
+        match servidor_de_configuracao.abrir(DURACAO_DA_CONFIGURACAO) {
+            Ok(_) => println!(
+                "página de configuração do certificado aberta por {} s: abra no celular {url_config}",
+                DURACAO_DA_CONFIGURACAO.as_secs()
+            ),
+            Err(e) => eprintln!("não consegui abrir a página de configuração: {e}"),
+        }
+    }
+    if opcoes.parear_ao_iniciar {
+        acesso.pareamento().abrir(agora(), DURACAO_DO_PAREAMENTO);
+    }
+    println!();
+
+    // O terminal é o painel de segurança: Enter abre o pareamento, c abre a página do
+    // certificado, s/t/outra tecla respondem aos pedidos de aprovação.
+    let console = Arc::new(Console::novo(acesso.clone(), Arc::new(servidor_de_configuracao.clone()), url_config));
+    let para_o_tique = console.clone();
     tokio::spawn(async move {
         let mut intervalo = tokio::time::interval(Duration::from_secs(1));
         loop {
             intervalo.tick().await;
-            let agora = agora();
-            let p = para_mostrar.pareamento();
-            print!("{}", linha_do_codigo(&p.codigo_atual(agora), p.segundos_restantes(agora)));
-            let _ = io::stdout().flush();
+            imprimir(para_o_tique.tique(agora()));
         }
+    });
+    let para_a_entrada = console.clone();
+    tokio::spawn(async move {
+        use tokio::io::{AsyncBufReadExt, BufReader};
+        let mut linhas = BufReader::new(tokio::io::stdin()).lines();
+        while let Ok(Some(linha)) = linhas.next_line().await {
+            imprimir(para_a_entrada.linha(&linha, agora()));
+        }
+        // entrada fechada (rodando sem terminal): só dá para parear com --parear
+        println!("\r\x1b[2Kaviso: sem entrada de terminal; o pareamento só abre com a opção --parear");
     });
 
     https::servir(listener_https, tls_config, vpad::app_com(tx, perfil_rx, armazem, acesso)).await

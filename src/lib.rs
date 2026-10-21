@@ -5,6 +5,7 @@ pub mod alerta;
 pub mod armazem;
 pub mod cli;
 pub mod configuracao;
+pub mod console;
 pub mod convite;
 pub mod dispositivo;
 pub mod dispositivos;

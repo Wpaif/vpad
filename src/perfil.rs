@@ -142,6 +142,8 @@ pub struct Opcoes {
     pub porta: u16,
     /// porta HTTPS, onde fica o controle de verdade
     pub porta_https: u16,
+    /// abrir o pareamento já na partida (por padrão ele só abre quando o dono do PC pede)
+    pub parear_ao_iniciar: bool,
 }
 
 /// Lê `--perfil <id>`, `--dispositivos` e `--revogar <id|todos>` (sem o nome do programa).
@@ -151,6 +153,7 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
     let mut acao = Acao::Servir;
     let mut porta = PORTA_PADRAO;
     let mut porta_https = PORTA_HTTPS_PADRAO;
+    let mut parear_ao_iniciar = false;
     let definir_acao = |nova: Acao, atual: &mut Acao| -> Result<(), String> {
         if *atual != Acao::Servir {
             return Err(format!("use só uma ação por vez\n{}", uso()));
@@ -176,6 +179,8 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
             id = args.next().ok_or("--perfil precisa de um valor")?;
         } else if let Some(valor) = arg.strip_prefix("--perfil=") {
             id = valor.to_string();
+        } else if arg == "--parear" {
+            parear_ao_iniciar = true;
         } else if arg == "--porta-https" {
             porta_https = ler_porta(&args.next().ok_or("--porta-https precisa de um número")?)?;
         } else if let Some(valor) = arg.strip_prefix("--porta-https=") {
@@ -206,7 +211,7 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
     if porta == porta_https {
         return Err(format!("as portas HTTP e HTTPS precisam ser diferentes (as duas estão em {porta})"));
     }
-    Ok(Opcoes { perfil, acao, porta, porta_https })
+    Ok(Opcoes { perfil, acao, porta, porta_https, parear_ao_iniciar })
 }
 
 /// Posição do perfil em `PERFIS`, que é o número trocado com o celular.
@@ -217,7 +222,7 @@ pub fn indice_do_perfil(id: &str) -> Option<u8> {
 fn uso() -> String {
     let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
     format!(
-        "uso: vpad [--perfil <{}>] [--porta <1-65535>] [--porta-https <1-65535>]\n     vpad --dispositivos\n     vpad --revogar <id|todos>\n     vpad --permitir-teclado <id> | --negar-teclado <id>",
+        "uso: vpad [--perfil <{}>] [--porta <1-65535>] [--porta-https <1-65535>] [--parear]\n     vpad --dispositivos\n     vpad --revogar <id|todos>\n     vpad --permitir-teclado <id> | --negar-teclado <id>",
         ids.join("|")
     )
 }
@@ -469,5 +474,30 @@ mod testes {
     fn a_mensagem_de_uso_cita_as_opcoes_de_teclado() {
         let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
         assert!(erro.contains("--permitir-teclado") && erro.contains("--negar-teclado"), "{erro}");
+    }
+
+    #[test]
+    fn por_padrao_o_pareamento_comeca_fechado() {
+        assert!(!opcoes_dos_argumentos(args(&[])).unwrap().parear_ao_iniciar);
+    }
+
+    #[test]
+    fn parear_abre_o_pareamento_ja_na_partida() {
+        assert!(opcoes_dos_argumentos(args(&["--parear"])).unwrap().parear_ao_iniciar);
+        let o = opcoes_dos_argumentos(args(&["--perfil", "ds4", "--parear", "--porta", "9000"])).unwrap();
+        assert!(o.parear_ao_iniciar);
+        assert_eq!((o.perfil.id, o.porta), ("ds4", 9000));
+    }
+
+    #[test]
+    fn parear_nao_conta_como_acao() {
+        // é só um sinalizador do servidor: não conflita com nada nem impede a ação padrão
+        assert_eq!(opcoes_dos_argumentos(args(&["--parear"])).unwrap().acao, Acao::Servir);
+    }
+
+    #[test]
+    fn a_mensagem_de_uso_cita_parear() {
+        let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
+        assert!(erro.contains("--parear"), "{erro}");
     }
 }

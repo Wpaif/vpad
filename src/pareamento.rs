@@ -75,7 +75,8 @@ impl Pareamento {
         totp::codigo(&self.segredo, totp::passo(agora))
     }
 
-    pub fn segundos_restantes(&self, agora: u64) -> u64 {
+    /// Segundos até o código mostrado agora mudar.
+    pub fn segundos_restantes_do_codigo(&self, agora: u64) -> u64 {
         totp::segundos_restantes(agora)
     }
 
@@ -301,7 +302,7 @@ mod testes {
     #[test]
     fn expoe_o_tempo_restante_do_codigo() {
         let p = p();
-        assert_eq!(p.segundos_restantes(T0), crate::totp::segundos_restantes(T0));
+        assert_eq!(p.segundos_restantes_do_codigo(T0), crate::totp::segundos_restantes(T0));
     }
 
     // ---------- janela de pareamento (fechada por padrão) ----------
