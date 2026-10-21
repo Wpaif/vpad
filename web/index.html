@@ -15,40 +15,8 @@
   <script type="module" src="/src/main.ts"></script>
 </head>
 <body>
-  <main id="pad" aria-label="Controle virtual">
-    <section class="zone left">
-      <div class="shoulders">
-        <button class="shoulder" data-trigger="LT">LT</button>
-        <button class="shoulder" data-btn="LB">LB</button>
-      </div>
-      <div class="dpad">
-        <button data-btn="Up" class="up" aria-label="Cima"><svg viewBox="0 0 24 24"><path d="M12 6l7 9H5z"/></svg></button>
-        <button data-btn="Left" class="left" aria-label="Esquerda"><svg viewBox="0 0 24 24"><path d="M6 12l9-7v14z"/></svg></button>
-        <button data-btn="Right" class="right" aria-label="Direita"><svg viewBox="0 0 24 24"><path d="M18 12l-9 7V5z"/></svg></button>
-        <button data-btn="Down" class="down" aria-label="Baixo"><svg viewBox="0 0 24 24"><path d="M12 18l-7-9h14z"/></svg></button>
-      </div>
-      <div class="stick" data-stick="left"><div class="knob"></div></div>
-    </section>
-
-    <section class="zone center">
-      <button class="pill" data-btn="Select">Select</button>
-      <button class="pill" data-btn="Start">Start</button>
-    </section>
-
-    <section class="zone right">
-      <div class="shoulders">
-        <button class="shoulder" data-btn="RB">RB</button>
-        <button class="shoulder" data-trigger="RT">RT</button>
-      </div>
-      <div class="face">
-        <button data-btn="Y" class="top">Y</button>
-        <button data-btn="X" class="left">X</button>
-        <button data-btn="B" class="right">B</button>
-        <button data-btn="A" class="bottom">A</button>
-      </div>
-      <div class="stick" data-stick="right"><div class="knob"></div></div>
-    </section>
-  </main>
+  <!-- o controle (src/Pad.svelte) é montado aqui -->
+  <div id="app"></div>
 
   <header class="topbar">
     <button id="status" class="status" aria-controls="stats" data-status="connecting">conectando…</button>

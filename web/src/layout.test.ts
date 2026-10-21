@@ -1,8 +1,8 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
+import { montarPagina } from "./testing/pagina";
 
 beforeEach(() => {
-  document.documentElement.innerHTML = readFileSync("index.html", "utf8");
+  montarPagina();
 });
 
 describe("barra superior", () => {

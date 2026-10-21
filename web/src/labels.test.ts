@@ -1,12 +1,11 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { applyKeyboardLabels, applyProfileLabels } from "./labels";
+import { montarPagina } from "./testing/pagina";
 
 let pad: HTMLElement;
 
 beforeEach(() => {
-  document.documentElement.innerHTML = readFileSync("index.html", "utf8");
-  pad = document.getElementById("pad")!;
+  pad = montarPagina();
 });
 
 const el = (sel: string) => pad.querySelector<HTMLElement>(sel)!;
