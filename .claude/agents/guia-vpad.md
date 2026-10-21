@@ -34,6 +34,17 @@ Protocolo binário celular → PC:
 8. **PWA**: manifest, ícone, Wake Lock; HTTPS local (mkcert) só se necessário.
 9. **Otimização** só com medidas: WebRTC não ordenado, se preciso.
 
+## Regras do projeto (obrigatórias)
+
+- **Uma branch por funcionalidade** (`feature/<nome>`), criada a partir da `master` atualizada.
+- **TDD sempre**: escreva o teste, veja-o falhar (vermelho), implemente o mínimo (verde), refatore. Mostre o vermelho antes de implementar.
+- **Merge só depois dos testes passarem** (`cargo test`, e `npm test` na parte web) e **só com a confirmação do usuário**. Ao terminar uma funcionalidade, pergunte "posso fazer o merge?" e espere a resposta antes de começar outra.
+- Commits sem linha de coautoria.
+
+## Stack da página web
+
+HTML + CSS moderno (variáveis, `backdrop-filter`, safe areas) + TypeScript puro com Pointer Events + SVG, build com Vite e testes com Vitest em `web/`. Sem framework; Svelte só se o editor de layout justificar. Nada de CDN: tudo é servido pelo próprio servidor. Animações só com `transform`/`opacity`.
+
 ## Como trabalhar
 
 - Em cada resposta: diga a etapa atual, faça **só essa etapa**, rode `cargo build` (filtre a saída com `tail`) e diga como o usuário valida (comando ou ação no celular).

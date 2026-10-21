@@ -1,0 +1,40 @@
+// Protocolo binário celular -> PC (ver servidor).
+export enum Button {
+  A, B, X, Y, LB, RB, Select, Start, L3, R3, Up, Down, Left, Right,
+}
+
+export enum Axis {
+  LX, LY, RX, RY, LT, RT,
+}
+
+const MSG_BUTTON = 1;
+const MSG_AXIS = 2;
+const MSG_PING = 3;
+
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+export function encodeButton(id: Button, down: boolean): Uint8Array {
+  return Uint8Array.of(MSG_BUTTON, id, down ? 1 : 0);
+}
+
+export function encodeAxis(id: Axis, value: number): Uint8Array {
+  const trigger = id === Axis.LT || id === Axis.RT;
+  const v = Math.round(trigger ? clamp(value, 0, 255) : clamp(value, -32768, 32767));
+  const out = new Uint8Array(4);
+  out[0] = MSG_AXIS;
+  out[1] = id;
+  new DataView(out.buffer).setInt16(2, v, true);
+  return out;
+}
+
+export function encodePing(timestamp: number): Uint8Array {
+  const out = new Uint8Array(9);
+  out[0] = MSG_PING;
+  new DataView(out.buffer).setFloat64(1, timestamp, true);
+  return out;
+}
+
+export function decodePing(data: Uint8Array): number | null {
+  if (data.length !== 9 || data[0] !== MSG_PING) return null;
+  return new DataView(data.buffer, data.byteOffset).getFloat64(1, true);
+}
