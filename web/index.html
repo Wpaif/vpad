@@ -7,6 +7,10 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0d12">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="vpad">
   <title>vpad</title>
   <script type="module" src="/src/main.ts"></script>
 </head>
@@ -52,6 +56,11 @@
       <svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.7 9 1.5 12c1.2 3 5 7 10.5 7s9.3-4 10.500-7C21.300 9 17.500 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8z"/></svg>
     </button>
   </header>
+
+  <aside id="install-hint" class="hint" hidden>
+    <p>Para usar em tela cheia: toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>, e abra pelo ícone.</p>
+    <button id="install-hint-close" aria-label="Dispensar dica">×</button>
+  </aside>
 
   <section id="stats" class="stats" hidden aria-label="Latência">
     <dl>
