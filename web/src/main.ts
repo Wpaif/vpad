@@ -2,8 +2,10 @@ import "./style.css";
 import { connect } from "./connection";
 import { bindController } from "./controller";
 import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
+import { applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
 import { mountProfilePicker } from "./picker";
+import { PROFILES } from "./profiles";
 import { encodeProfile } from "./protocol";
 import { bindAppHeight, showViewportDebug } from "./viewport";
 import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderStats, renderStatus } from "./ui";
@@ -53,7 +55,11 @@ const link = connect({
     renderStatus(statusEl, status, null);
   },
   onPingSent: (ts) => meter.sent(ts),
-  onProfile: (index) => picker.setCurrent(index),
+  onProfile: (index) => {
+    picker.setCurrent(index);
+    const profile = PROFILES[index];
+    if (profile) applyProfileLabels(pad, profile.id);
+  },
   onLatency: (_ms, sentAt) => {
     const ms = meter.received(sentAt, now());
     if (ms !== null) renderStatus(statusEl, "open", Math.round(ms));
