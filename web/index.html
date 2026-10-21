@@ -66,6 +66,7 @@
     <div class="picker-row">
       <span class="label">controle</span>
       <div id="profile-picker" class="picker" role="group" aria-label="Perfil do controle"></div>
+      <button id="open-key-editor" class="link" type="button">Editar teclas…</button>
     </div>
     <dl>
       <div><dt>último</dt><dd data-stat="last">–</dd></div>
@@ -79,6 +80,8 @@
       <polyline data-stat="spark" points=""/>
     </svg>
   </section>
+
+  <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" hidden></div>
 
   <div class="rotate" role="alert">Gire o celular para o modo paisagem</div>
 </body>

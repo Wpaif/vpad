@@ -25,3 +25,18 @@ describe("seletor de perfil", () => {
     expect(document.getElementById("stats")!.contains(picker)).toBe(true);
   });
 });
+
+describe("editor de teclas", () => {
+  it("o botão para abri-lo fica dentro do painel, sem ocupar espaço fixo", () => {
+    const button = document.getElementById("open-key-editor");
+    expect(button).not.toBeNull();
+    expect(document.getElementById("stats")!.contains(button)).toBe(true);
+  });
+
+  it("o editor começa escondido e fica fora do controle", () => {
+    const editor = document.getElementById("key-editor")!;
+    expect(editor.hidden).toBe(true);
+    expect(editor.getAttribute("role")).toBe("dialog");
+    expect(document.getElementById("pad")!.contains(editor)).toBe(false);
+  });
+});
