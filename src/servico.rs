@@ -22,6 +22,18 @@ pub trait Dispositivo: Send {
 /// Cria o dispositivo de um perfil.
 pub type Fabrica = Box<dyn Fn(&'static Perfil) -> io::Result<Box<dyn Dispositivo>> + Send>;
 
+/// Categoria do evento para o log, sem os detalhes: com o teclado ativo, o id e o estado
+/// de um botão representam o que está sendo digitado e não devem virar histórico.
+fn categoria(evento: &Evento) -> &'static str {
+    match evento {
+        Evento::Botao { .. } => "botão",
+        Evento::Eixo { .. } => "eixo",
+        Evento::Ping => "ping",
+        Evento::TrocarPerfil(_) => "troca de perfil",
+        Evento::SoltarTudo => "soltar tudo",
+    }
+}
+
 /// Roda até o canal fechar. `perfil` carrega o índice do perfil ativo e é publicado a
 /// cada pedido de troca (inclusive os que falham), para o celular nunca ficar no escuro.
 /// `mapa` é o mapa de teclas, entregue ao dispositivo ativo ao começar, a cada mudança e
@@ -48,7 +60,7 @@ pub async fn processar(
                 let Some(evento) = evento else { break };
                 let Evento::TrocarPerfil(pedido) = evento else {
                     if let Err(e) = dispositivo.aplicar(evento) {
-                        eprintln!("erro ao enviar {evento:?} ao controle virtual: {e}");
+                        eprintln!("erro ao aplicar {} ao controle virtual: {e}", categoria(&evento));
                     }
                     continue;
                 };
@@ -235,5 +247,19 @@ mod testes {
     async fn dispositivo_criado_na_troca_recebe_o_mapa_atual() {
         let r = rodar_completo(vec![Evento::TrocarPerfil(3)], 0, None, false).await;
         assert_eq!(r.mapas, vec!["xbox360", "teclado"]);
+    }
+
+    #[test]
+    fn o_log_de_falha_diz_a_categoria_mas_nao_os_detalhes_do_evento() {
+        let aviso = format!(
+            "erro ao aplicar {} ao controle virtual: dispositivo sumiu",
+            categoria(&Evento::Botao { id: 7, pressionado: true })
+        );
+        assert!(aviso.contains("botão") && aviso.contains("dispositivo sumiu"), "{aviso}");
+        assert!(!aviso.contains('7') && !aviso.contains("pressionado"), "{aviso}");
+
+        assert_eq!(categoria(&Evento::Eixo { id: 5, valor: -1234 }), "eixo");
+        assert_eq!(categoria(&Evento::Ping), "ping");
+        assert_eq!(categoria(&Evento::SoltarTudo), "soltar tudo");
     }
 }

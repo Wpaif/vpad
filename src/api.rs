@@ -29,7 +29,7 @@ fn token_do_cabecalho(headers: &HeaderMap) -> Option<&str> {
 /// Confere o token e exige a permissão do modo teclado: ler e mudar as teclas é coisa de quem
 /// pode digitar no PC. Devolve a resposta de erro pronta se não passar.
 pub(crate) fn exigir_teclado(estado: &Estado, headers: &HeaderMap) -> Result<(), Response> {
-    let permissoes = token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t));
+    let permissoes = token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t, agora()));
     match permissoes {
         None => Err(erro(StatusCode::UNAUTHORIZED, "não autorizado")),
         Some(p) if !p.teclado => Err(erro(

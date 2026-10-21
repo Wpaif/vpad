@@ -106,13 +106,13 @@ impl Acesso {
         self.inatividade
     }
 
-    pub fn autorizado(&self, token: &str) -> bool {
-        self.dispositivos.autorizado(token)
+    pub fn autorizado(&self, token: &str, agora: u64) -> bool {
+        self.dispositivos.autorizado(token, agora)
     }
 
-    /// As permissões do aparelho dono do token, ou nada se ele não for pareado.
-    pub fn permissoes(&self, token: &str) -> Option<Permissoes> {
-        self.dispositivos.consultar(token)
+    /// As permissões do aparelho dono do token, ou nada se ele não for pareado (ou venceu).
+    pub fn permissoes(&self, token: &str, agora: u64) -> Option<Permissoes> {
+        self.dispositivos.consultar(token, agora)
     }
 
     /// Quanto tempo o PC espera por uma confirmação antes de desistir.
@@ -186,6 +186,8 @@ mod testes {
     use std::sync::Mutex;
 
     const T0: u64 = 1_700_000_010;
+    /// Instante fixo das consultas por token nos testes.
+    const AGORA: u64 = 10_000;
 
     fn novo_acesso(prazo: Duration) -> (Arc<Acesso>, Arc<Mutex<Vec<Alerta>>>) {
         let vistos = Arc::new(Mutex::new(vec![]));
@@ -242,8 +244,8 @@ mod testes {
     #[test]
     fn sem_ninguem_pareado_nenhum_token_vale() {
         let a = acesso();
-        assert!(!a.autorizado(""));
-        assert!(!a.autorizado("qualquer"));
+        assert!(!a.autorizado("", AGORA));
+        assert!(!a.autorizado("qualquer", AGORA));
     }
 
     #[tokio::test]
@@ -261,11 +263,19 @@ mod testes {
         a.aprovacoes().responder(id, Decisao::Aprovado { teclado: false });
         match tarefa.await.unwrap() {
             Pareamento_::Pareado(p) => {
-                assert!(a.autorizado(&p.token));
+                assert!(a.autorizado(&p.token, AGORA));
                 assert_eq!(a.dispositivos().listar()[0].nome, "iPhone");
             }
             outro => panic!("esperava parear, veio {outro:?}"),
         }
+    }
+
+    #[test]
+    fn o_debug_do_pareamento_nao_mostra_o_token() {
+        let p = Pareado { id: "ab12cd34".into(), token: "segredo-do-aparelho".into() };
+        let texto = format!("{:?}", Pareamento_::Pareado(p));
+        assert!(texto.contains("Pareado"), "{texto}");
+        assert!(!texto.contains("segredo-do-aparelho"), "{texto}");
     }
 
     #[tokio::test]
@@ -286,12 +296,12 @@ mod testes {
         let a = acesso();
         let r = parear_e_responder(&a, &a.pareamento().codigo_atual(T0), "iPhone", T0, None, Decisao::Aprovado { teclado: true }).await;
         let Pareamento_::Pareado(p) = r else { panic!("{r:?}") };
-        assert!(a.dispositivos().teclado_permitido(&p.token));
+        assert!(a.dispositivos().teclado_permitido(&p.token, AGORA));
 
         a.pareamento().abrir(T0 + 30, 100_000); // o primeiro pareamento fechou a janela: o PC a reabre
         let r = parear_e_responder(&a, &a.pareamento().codigo_atual(T0 + 30), "iPad", T0 + 30, None, Decisao::Aprovado { teclado: false }).await;
         let Pareamento_::Pareado(p) = r else { panic!("{r:?}") };
-        assert!(!a.dispositivos().teclado_permitido(&p.token));
+        assert!(!a.dispositivos().teclado_permitido(&p.token, AGORA));
     }
 
     #[tokio::test]

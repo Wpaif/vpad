@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsUrl } from "./auth";
+import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsProtocols, wsUrl } from "./auth";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
 
@@ -86,14 +86,20 @@ describe("id do aparelho (para o dono do PC liberar o teclado)", () => {
 });
 
 describe("wsUrl", () => {
-  it("monta a URL do WebSocket com o token do aparelho", () => {
+  it("monta a URL do WebSocket sem o token", () => {
     const loc = { protocol: "http:", host: "192.168.68.103:8080" } as Location;
-    expect(wsUrl(loc, TOKEN)).toBe(`ws://192.168.68.103:8080/ws?t=${TOKEN}`);
+    expect(wsUrl(loc)).toBe("ws://192.168.68.103:8080/ws");
   });
 
   it("usa wss em páginas https", () => {
     const loc = { protocol: "https:", host: "pc.local" } as Location;
-    expect(wsUrl(loc, TOKEN)).toMatch(/^wss:\/\/pc\.local\/ws\?t=/);
+    expect(wsUrl(loc)).toBe("wss://pc.local/ws");
+  });
+});
+
+describe("wsProtocols", () => {
+  it("leva o token no subprotocolo, fora da URL", () => {
+    expect(wsProtocols(TOKEN)).toEqual(["vpad", `vpad.${TOKEN}`]);
   });
 });
 

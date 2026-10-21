@@ -7,7 +7,7 @@ use std::{
     fs,
     io::{self, Write},
     net::IpAddr,
-    os::unix::fs::PermissionsExt,
+    os::unix::fs::{OpenOptionsExt, PermissionsExt},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -87,16 +87,41 @@ fn instante(segundos: u64) -> io::Result<OffsetDateTime> {
     OffsetDateTime::from_unix_timestamp(segundos as i64).map_err(erro)
 }
 
-/// Grava com permissão restrita (chaves) usando arquivo temporário e renomeação.
+/// Grava com permissão restrita (chaves) usando arquivo temporário e renomeação. O modo já
+/// vale na criação, sem uma janela em que o arquivo nasce legível por outros.
 fn escrever(arquivo: &Path, conteudo: &str, privado: bool) -> io::Result<()> {
     let temporario = arquivo.with_extension("tmp");
-    let mut f = fs::File::create(&temporario)?;
+    let mut opcoes = fs::OpenOptions::new();
+    opcoes.write(true).create(true).truncate(true);
+    if privado {
+        opcoes.mode(0o600);
+    }
+    let mut f = opcoes.open(&temporario)?;
+    // `mode` só vale ao criar: um temporário que sobrou de outra execução pode estar largo.
     if privado {
         f.set_permissions(fs::Permissions::from_mode(0o600))?;
     }
     f.write_all(conteudo.as_bytes())?;
     drop(f);
     fs::rename(&temporario, arquivo)
+}
+
+/// Fecha a pasta das chaves e conserta permissões largas de uma instalação anterior (ou
+/// mexidas à mão): sem isso, outro usuário da máquina poderia ler a chave da autoridade.
+fn proteger_chaves(pasta: &Path) -> io::Result<()> {
+    fs::set_permissions(pasta, fs::Permissions::from_mode(0o700))?;
+    for arquivo in ["ca-chave.pem", "servidor-chave.pem"] {
+        let caminho = pasta.join(arquivo);
+        match fs::metadata(&caminho) {
+            Ok(m) if m.permissions().mode() & 0o777 != 0o600 => {
+                fs::set_permissions(&caminho, fs::Permissions::from_mode(0o600))?;
+            }
+            Ok(_) => {}
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
 }
 
 pub fn nome_do_computador() -> String {
@@ -237,6 +262,7 @@ fn folha_ainda_serve(pasta: &Path, ips: &[String], agora: u64) -> bool {
 /// Carrega a autoridade e o certificado de `pasta`, criando ou renovando o que faltar.
 pub fn carregar_ou_criar(pasta: &Path, ips: &[IpAddr], agora: u64) -> io::Result<Material> {
     fs::create_dir_all(pasta)?;
+    proteger_chaves(pasta)?;
     // IP fora da rede local não entra no certificado: a autoridade não pode assiná-lo, e um
     // certificado com ele seria recusado inteiro pelos celulares.
     let (permitidos, ips_ignorados): (Vec<IpAddr>, Vec<IpAddr>) = ips.iter().partition(|i| ip_permitido(**i));
@@ -406,6 +432,34 @@ mod testes {
     fn as_chaves_ficam_legiveis_so_para_o_dono() {
         let pasta = Pasta::nova("perm");
         carregar_ou_criar(&pasta.0, &[ip(127, 0, 0, 1)], agora()).unwrap();
+        for arquivo in ["ca-chave.pem", "servidor-chave.pem"] {
+            let modo = fs::metadata(pasta.0.join(arquivo)).unwrap().permissions().mode() & 0o777;
+            assert_eq!(modo, 0o600, "{arquivo}");
+        }
+    }
+
+    #[test]
+    fn a_pasta_das_chaves_fica_fechada_para_os_outros() {
+        let pasta = Pasta::nova("perm-pasta");
+        carregar_ou_criar(&pasta.0, &[ip(127, 0, 0, 1)], agora()).unwrap();
+        let modo = fs::metadata(&pasta.0).unwrap().permissions().mode() & 0o777;
+        assert_eq!(modo, 0o700, "nem listar a pasta das chaves os outros podem");
+    }
+
+    #[test]
+    fn permissao_frouxa_de_uma_instalacao_antiga_e_corrigida_ao_carregar() {
+        let pasta = Pasta::nova("perm-antiga");
+        carregar_ou_criar(&pasta.0, &[ip(127, 0, 0, 1)], agora()).unwrap();
+        // como ficaria uma pasta criada por uma versão anterior (ou mexida à mão)
+        fs::set_permissions(&pasta.0, fs::Permissions::from_mode(0o755)).unwrap();
+        for arquivo in ["ca-chave.pem", "servidor-chave.pem"] {
+            fs::set_permissions(pasta.0.join(arquivo), fs::Permissions::from_mode(0o644)).unwrap();
+        }
+
+        carregar_ou_criar(&pasta.0, &[ip(127, 0, 0, 1)], agora()).unwrap();
+
+        let modo = fs::metadata(&pasta.0).unwrap().permissions().mode() & 0o777;
+        assert_eq!(modo, 0o700, "a pasta");
         for arquivo in ["ca-chave.pem", "servidor-chave.pem"] {
             let modo = fs::metadata(pasta.0.join(arquivo)).unwrap().permissions().mode() & 0o777;
             assert_eq!(modo, 0o600, "{arquivo}");

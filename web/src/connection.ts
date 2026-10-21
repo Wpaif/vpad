@@ -12,6 +12,8 @@ export type Status = "connecting" | "open" | "reconnecting" | "closed";
 
 export interface Options {
   url: string;
+  /** Subprotocolos oferecidos na abertura (o token do aparelho vai em `vpad.<token>`). */
+  protocols?: string[];
   onStatus: (status: Status) => void;
   onLatency: (ms: number, sentAt: number) => void;
   onPingSent?: (ts: number) => void;
@@ -47,7 +49,7 @@ export function connect(opts: Options): Connection {
   let stopped = false;
 
   const open = () => {
-    const ws = new Impl(opts.url);
+    const ws = new Impl(opts.url, opts.protocols);
     ws.binaryType = "arraybuffer";
     socket = ws;
 

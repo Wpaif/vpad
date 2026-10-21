@@ -1,5 +1,5 @@
 import "./style.css";
-import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsUrl } from "./auth";
+import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsProtocols, wsUrl } from "./auth";
 import { connect } from "./connection";
 import { bindController } from "./controller";
 import { mountKeyEditor } from "./editor";
@@ -112,7 +112,8 @@ function start(token: string) {
   });
 
   const link = connect({
-    url: wsUrl(location, token),
+    url: wsUrl(location),
+    protocols: wsProtocols(token),
     now,
     onStatus: (status) => {
       if (status !== "open") {

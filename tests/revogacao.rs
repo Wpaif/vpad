@@ -15,13 +15,13 @@ async fn revogacao_de_outro_processo_vale_na_hora() {
     let arquivo = pasta.join("dispositivos.json");
 
     let dispositivos = Dispositivos::com_arquivo(arquivo.clone());
-    let p = dispositivos.parear("iPhone", 0).unwrap();
+    let p = dispositivos.parear("iPhone", vpad::dispositivos::agora()).unwrap();
     let acesso = Acesso::novo(
         dispositivos,
         Pareamento::com_segredo(b"segredo-de-teste-123".to_vec()),
         Duration::from_secs(6),
     );
-    assert!(acesso.autorizado(&p.token));
+    assert!(acesso.autorizado(&p.token, vpad::dispositivos::agora()));
 
     let observador = vpad::vigiar_revogacoes(acesso.clone()).unwrap().expect("cadastro em disco");
 
@@ -30,12 +30,12 @@ async fn revogacao_de_outro_processo_vale_na_hora() {
     assert!(outro.revogar(&p.id).unwrap());
 
     for _ in 0..200 {
-        if !acesso.autorizado(&p.token) {
+        if !acesso.autorizado(&p.token, vpad::dispositivos::agora()) {
             break;
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
     }
-    assert!(!acesso.autorizado(&p.token), "o inotify não recarregou o cadastro");
+    assert!(!acesso.autorizado(&p.token, vpad::dispositivos::agora()), "o inotify não recarregou o cadastro");
 
     observador.abort();
     fs::remove_dir_all(&pasta).ok();
