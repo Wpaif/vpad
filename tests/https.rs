@@ -148,7 +148,7 @@ async fn o_alerta_de_pareamento_leva_o_ip_real_de_quem_conectou_por_https() {
     );
     acesso.pareamento().abrir(agora, 600);
     let app = vpad::app_com(
-        tokio::sync::mpsc::unbounded_channel().0,
+        tokio::sync::mpsc::channel(64).0,
         tokio::sync::watch::channel(0).1,
         Arc::new(ArmazemMapa::em_memoria()),
         acesso,

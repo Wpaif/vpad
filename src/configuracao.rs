@@ -114,6 +114,26 @@ pub fn rotas(cfg: Arc<Configuracao>) -> Router {
         .route("/vpad.mobileconfig", get(perfil))
         .route("/ca.crt", get(certificado))
         .with_state(cfg)
+        .layer(axum::middleware::map_response(cabecalhos_de_seguranca))
+}
+
+/// Esta página é HTTP simples e não guarda segredo, mas ainda assim não deve ser embutida em
+/// quadro nenhum, nem carregar recursos de fora.
+async fn cabecalhos_de_seguranca(mut resposta: Response) -> Response {
+    use axum::http::HeaderValue;
+
+    let h = resposta.headers_mut();
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; \
+             form-action 'none'; frame-ancestors 'none'",
+        ),
+    );
+    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    h.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    h.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    resposta
 }
 
 struct Aberto {
@@ -460,6 +480,20 @@ mod testes {
         );
         assert!(s.abrir(Duration::from_secs(5)).is_err());
         assert!(!s.aberto());
+    }
+
+    #[tokio::test]
+    async fn toda_resposta_traz_cabecalhos_de_seguranca() {
+        for caminho in ["/", "/vpad.mobileconfig", "/ca.crt", "/nao-existe"] {
+            let (_, headers, _) = pegar("GET", caminho, Some("192.168.68.103:8080")).await;
+            let csp = headers[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
+            assert!(csp.contains("default-src 'none'"), "{caminho}: {csp}");
+            assert!(csp.contains("frame-ancestors 'none'"), "{caminho}: {csp}");
+            assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "{caminho}");
+            assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY", "{caminho}");
+            assert_eq!(headers[header::REFERRER_POLICY], "no-referrer", "{caminho}");
+            assert!(!headers.contains_key(header::STRICT_TRANSPORT_SECURITY), "a página é HTTP simples");
+        }
     }
 
     #[tokio::test]

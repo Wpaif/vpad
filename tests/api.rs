@@ -44,7 +44,7 @@ fn ambiente_completo(armazem: Arc<ArmazemMapa>, prazo_da_aprovacao: Duration) ->
     // o pareamento nasce fechado; os testes que pareiam o abrem
     // o aparelho de teste já tem a permissão do modo teclado
     let token = acesso.dispositivos().parear_com("teste", 0, true).unwrap().token;
-    let app = vpad::app_com(mpsc::unbounded_channel().0, watch::channel(0).1, armazem.clone(), acesso.clone());
+    let app = vpad::app_com(mpsc::channel(64).0, watch::channel(0).1, armazem.clone(), acesso.clone());
     Ambiente { app, acesso, armazem, token, alertas }
 }
 
@@ -529,4 +529,136 @@ async fn permissao_tirada_vale_na_proxima_chamada() {
     assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::OK);
     a.acesso.dispositivos().definir_teclado(&id, false).unwrap();
     assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::FORBIDDEN);
+}
+
+// ---------- Host/Origin e autenticação antes do corpo ----------
+
+/// Faz uma chamada escolhendo os cabeçalhos `Host` e `Origin`.
+async fn chamar_com_host_origem(
+    a: &Ambiente,
+    metodo: &str,
+    uri: &str,
+    corpo: Option<&str>,
+    autorizacao: Option<&str>,
+    host: Option<&str>,
+    origin: Option<&str>,
+) -> (StatusCode, Value) {
+    let mut req = Request::builder().method(metodo).uri(uri);
+    if let Some(h) = host {
+        req = req.header(header::HOST, h);
+    }
+    if let Some(o) = origin {
+        req = req.header(header::ORIGIN, o);
+    }
+    if let Some(x) = autorizacao {
+        req = req.header(header::AUTHORIZATION, x);
+    }
+    let body = match corpo {
+        Some(c) => {
+            req = req.header(header::CONTENT_TYPE, "application/json");
+            Body::from(c.to_string())
+        }
+        None => Body::empty(),
+    };
+    let res = a.app.clone().oneshot(req.body(body).unwrap()).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+}
+
+#[tokio::test]
+async fn host_de_site_qualquer_e_recusado_mesmo_com_token_valido() {
+    let a = ambiente();
+    let auth = format!("Bearer {}", a.token);
+    for host in ["evil.com", "evil.com:443", "8.8.8.8", "127.0.0.1.evil.com"] {
+        let (status, _) = chamar_com_host_origem(
+            &a, "GET", "/api/teclado", None, Some(&auth), Some(host), None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::MISDIRECTED_REQUEST, "{host}");
+    }
+}
+
+#[tokio::test]
+async fn host_da_rede_local_e_aceito() {
+    let a = ambiente();
+    let auth = format!("Bearer {}", a.token);
+    for host in ["127.0.0.1:8443", "192.168.68.50:8443", "meu-pc.local"] {
+        let (status, _) = chamar_com_host_origem(
+            &a, "GET", "/api/teclado", None, Some(&auth), Some(host), None,
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{host}");
+    }
+}
+
+#[tokio::test]
+async fn origem_de_site_qualquer_ou_nula_e_recusada() {
+    let a = ambiente();
+    let auth = format!("Bearer {}", a.token);
+    for origin in ["https://evil.com", "http://192.168.68.50:8443", "null", "https://user@evil.com"] {
+        let (status, _) = chamar_com_host_origem(
+            &a, "GET", "/api/teclado", None, Some(&auth), Some("192.168.68.50:8443"), Some(origin),
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{origin}");
+    }
+}
+
+#[tokio::test]
+async fn origem_da_propria_pagina_e_aceita() {
+    let a = ambiente();
+    let auth = format!("Bearer {}", a.token);
+    let (status, _) = chamar_com_host_origem(
+        &a,
+        "GET",
+        "/api/teclado",
+        None,
+        Some(&auth),
+        Some("192.168.68.50:8443"),
+        Some("https://192.168.68.50:8443"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn token_invalido_responde_401_antes_de_o_corpo_ser_lido() {
+    let a = ambiente();
+    // JSON quebrado: se o corpo fosse interpretado antes da autenticação, viria 400, não 401
+    let (status, _) = chamar_com_host_origem(
+        &a, "PUT", "/api/teclado", Some("{\"mapa\":"), None, Some("127.0.0.1:8443"), None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(*a.armazem.atual(), Mapa::padrao());
+}
+
+#[tokio::test]
+async fn sem_permissao_de_teclado_o_corpo_tambem_nao_e_lido() {
+    let a = ambiente();
+    let sem = a.acesso.dispositivos().parear("iPad", 0).unwrap().token;
+    let (status, _) = chamar_com_host_origem(
+        &a,
+        "PUT",
+        "/api/teclado",
+        Some("{\"mapa\":"),
+        Some(&format!("Bearer {sem}")),
+        Some("127.0.0.1:8443"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn corpo_gigante_e_recusado_antes_de_ser_lido() {
+    let a = ambiente();
+    let auth = format!("Bearer {}", a.token);
+    let enorme = "x".repeat(64 * 1024);
+    let (status, _) = chamar_com_host_origem(
+        &a, "PUT", "/api/teclado", Some(&enorme), Some(&auth), Some("127.0.0.1:8443"), None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::PAYLOAD_TOO_LARGE);
 }

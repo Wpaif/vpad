@@ -192,6 +192,11 @@ impl Dispositivos {
             .collect()
     }
 
+    /// O arquivo em que o cadastro é gravado (para vigiar mudanças feitas por outro processo).
+    pub fn caminho(&self) -> Option<&Path> {
+        self.arquivo.as_deref()
+    }
+
     /// Nome cadastrado do aparelho `id` (para mensagens no terminal).
     pub fn nome_de(&self, id: &str) -> String {
         let lista = self.lista.lock().unwrap();
