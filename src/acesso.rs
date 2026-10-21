@@ -270,6 +270,14 @@ mod testes {
         }
     }
 
+    #[test]
+    fn o_debug_do_pareamento_nao_mostra_o_token() {
+        let p = Pareado { id: "ab12cd34".into(), token: "segredo-do-aparelho".into() };
+        let texto = format!("{:?}", Pareamento_::Pareado(p));
+        assert!(texto.contains("Pareado"), "{texto}");
+        assert!(!texto.contains("segredo-do-aparelho"), "{texto}");
+    }
+
     #[tokio::test]
     async fn o_nome_mostrado_ao_dono_do_pc_vem_sem_caracteres_de_controle() {
         let a = acesso();
