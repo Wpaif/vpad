@@ -32,6 +32,8 @@ export interface Connection {
   /** Envia se o socket estiver aberto; entrada velha não vale a pena enfileirar. */
   send: (msg: Uint8Array<ArrayBuffer>) => boolean;
   close: () => void;
+  /** Muda o intervalo do ping, na conexão atual e nas próximas. */
+  setPingEvery: (ms: number) => void;
 }
 
 const BACKOFF_MS = [500, 1000, 2000, 4000];
@@ -39,7 +41,7 @@ const OPEN = 1;
 
 export function connect(opts: Options): Connection {
   const Impl = opts.WebSocketImpl ?? WebSocket;
-  const pingEvery = opts.pingEveryMs ?? 1000;
+  let pingEvery = opts.pingEveryMs ?? 1000;
   const now = opts.now ?? (() => performance.timeOrigin + performance.now());
 
   let socket: WebSocket | null = null;
@@ -47,6 +49,15 @@ export function connect(opts: Options): Connection {
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let failures = 0;
   let stopped = false;
+
+  const startPing = (ws: WebSocket) => {
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => {
+      const ts = now();
+      ws.send(encodePing(ts));
+      opts.onPingSent?.(ts);
+    }, pingEvery);
+  };
 
   const open = () => {
     const ws = new Impl(opts.url, opts.protocols);
@@ -56,11 +67,7 @@ export function connect(opts: Options): Connection {
     ws.onopen = () => {
       failures = 0;
       opts.onStatus("open");
-      pingTimer = setInterval(() => {
-        const ts = now();
-        ws.send(encodePing(ts));
-        opts.onPingSent?.(ts);
-      }, pingEvery);
+      startPing(ws);
     };
     ws.onmessage = (e) => {
       const data = new Uint8Array(e.data as ArrayBuffer);
@@ -108,6 +115,10 @@ export function connect(opts: Options): Connection {
       if (stopped || socket?.readyState !== OPEN) return false;
       socket.send(msg);
       return true;
+    },
+    setPingEvery(ms) {
+      pingEvery = ms;
+      if (!stopped && socket?.readyState === OPEN) startPing(socket);
     },
     close() {
       stopped = true;

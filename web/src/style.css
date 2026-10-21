@@ -325,6 +325,8 @@ button[data-pressed] {
   background: transparent;
 }
 
+.link[aria-pressed="true"] { color: var(--accent, #7aa2ff); border-color: currentColor; }
+
 /* botões que mostram uma tecla (modo teclado) */
 [data-keycap] { font-size: 13px; letter-spacing: 0; text-transform: none; }
 .face [data-keycap] { font-size: 13px; font-weight: 700; }

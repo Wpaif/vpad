@@ -77,3 +77,12 @@ describe("aviso do modo teclado no painel", () => {
     expect(nota!.getAttribute("role")).toBe("status");
   });
 });
+
+describe("painel de latência", () => {
+  it("tem o interruptor do ping curto dentro do painel", () => {
+    const toggle = document.getElementById("ping-toggle");
+    expect(toggle).not.toBeNull();
+    expect(toggle!.tagName).toBe("BUTTON");
+    expect(document.getElementById("stats")!.contains(toggle)).toBe(true);
+  });
+});
