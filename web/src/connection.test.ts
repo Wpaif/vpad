@@ -144,3 +144,26 @@ describe("connect", () => {
     expect(statuses.at(-1)).toBe("closed");
   });
 });
+
+describe("ganchos do medidor", () => {
+  it("avisa quando envia ping e passa o timestamp do ping ao receber o pong", () => {
+    const sent: number[] = [];
+    const pongs: Array<[number, number]> = [];
+    connect({
+      url: "ws://pc/ws",
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: () => {},
+      onLatency: (ms, sentAt) => pongs.push([ms, sentAt]),
+      onPingSent: (ts) => sent.push(ts),
+      pingEveryMs: 1000,
+      now: () => Date.now(),
+    });
+    last().open();
+    vi.advanceTimersByTime(1000);
+    const ts = sent[0]!;
+    expect(ts).toBe(Date.now());
+    vi.advanceTimersByTime(15);
+    last().receive(last().sent.at(-1)!);
+    expect(pongs).toEqual([[15, ts]]);
+  });
+});

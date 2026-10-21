@@ -50,7 +50,21 @@
     <svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.7 9 1.5 12c1.2 3 5 7 10.5 7s9.3-4 10.500-7C21.300 9 17.500 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8z"/></svg>
   </button>
 
-  <div id="status" class="status" role="status" data-status="connecting">conectando…</div>
+  <button id="status" class="status" aria-controls="stats" data-status="connecting">conectando…</button>
+
+  <section id="stats" class="stats" hidden aria-label="Latência">
+    <dl>
+      <div><dt>último</dt><dd data-stat="last">–</dd></div>
+      <div><dt>média</dt><dd data-stat="avg">–</dd></div>
+      <div><dt>mín</dt><dd data-stat="min">–</dd></div>
+      <div><dt>máx</dt><dd data-stat="max">–</dd></div>
+      <div><dt>jitter</dt><dd data-stat="jitter">–</dd></div>
+      <div><dt>perda</dt><dd data-stat="loss">0%</dd></div>
+    </dl>
+    <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
+      <polyline data-stat="spark" points=""/>
+    </svg>
+  </section>
 
   <div class="rotate" role="alert">Gire o celular para o modo paisagem</div>
 </body>
