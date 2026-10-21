@@ -1,3 +1,5 @@
+mod api;
+pub mod armazem;
 pub mod dispositivo;
 pub mod mapa;
 pub mod mapeamento;
@@ -18,11 +20,13 @@ use axum::{
     routing::get,
 };
 use rust_embed::RustEmbed;
+use std::sync::Arc;
 use tokio::sync::{
     mpsc::{self, UnboundedSender},
     watch,
 };
 
+use armazem::ArmazemMapa;
 use protocolo::{Evento, codificar_perfil, decodificar};
 
 
@@ -57,6 +61,7 @@ struct Estado {
     saida: Saida,
     /// Índice do perfil ativo, publicado pelo serviço dono do controle virtual.
     perfil: watch::Receiver<u8>,
+    mapa: Arc<ArmazemMapa>,
 }
 
 async fn rota_ws(ws: WebSocketUpgrade, State(estado): State<Estado>) -> Response {
@@ -67,7 +72,7 @@ async fn avisar_perfil(ws: &mut WebSocket, indice: u8) -> Result<(), axum::Error
     ws.send(Message::Binary(codificar_perfil(indice).to_vec().into())).await
 }
 
-async fn conexao(mut ws: WebSocket, Estado { saida, mut perfil }: Estado) {
+async fn conexao(mut ws: WebSocket, Estado { saida, mut perfil, .. }: Estado) {
     let atual = *perfil.borrow_and_update();
     if avisar_perfil(&mut ws, atual).await.is_ok() {
         loop {
@@ -100,15 +105,17 @@ async fn conexao(mut ws: WebSocket, Estado { saida, mut perfil }: Estado) {
     let _ = saida.send(Evento::SoltarTudo);
 }
 
-/// Servidor cujos eventos de controle vão para `saida`; `perfil` informa o perfil ativo.
-pub fn app_com(saida: Saida, perfil: watch::Receiver<u8>) -> Router {
+/// Servidor cujos eventos de controle vão para `saida`; `perfil` informa o perfil ativo e
+/// `mapa` guarda as teclas do modo teclado.
+pub fn app_com(saida: Saida, perfil: watch::Receiver<u8>, mapa: Arc<ArmazemMapa>) -> Router {
     Router::new()
         .route("/ws", get(rota_ws))
-        .with_state(Estado { saida, perfil })
+        .route("/api/teclado", get(api::obter).put(api::definir))
+        .with_state(Estado { saida, perfil, mapa })
         .fallback(get(estatico))
 }
 
 /// Servidor que descarta os eventos (só serve a página).
 pub fn app() -> Router {
-    app_com(mpsc::unbounded_channel().0, watch::channel(0).1)
+    app_com(mpsc::unbounded_channel().0, watch::channel(0).1, Arc::new(ArmazemMapa::em_memoria()))
 }
