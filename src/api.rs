@@ -2,12 +2,15 @@
 
 use axum::{
     Json,
-    extract::State,
-    http::{HeaderMap, StatusCode, header},
+    extract::{ConnectInfo, State},
+    http::{HeaderMap, StatusCode, header, request::Parts},
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    net::SocketAddr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -90,14 +93,24 @@ fn agora() -> u64 {
 
 /// Troca o código de 6 dígitos do terminal por um token exclusivo do aparelho. Não exige
 /// token (é assim que o aparelho consegue o primeiro), mas erra com limite de tentativas.
-pub(crate) async fn parear(State(estado): State<Estado>, Json(pedido): Json<PedidoPareamento>) -> Response {
+pub(crate) async fn parear(
+    State(estado): State<Estado>,
+    partes: Parts,
+    Json(pedido): Json<PedidoPareamento>,
+) -> Response {
     let nome = pedido.nome.unwrap_or_default();
-    match estado.acesso.parear(&pedido.codigo, &nome, agora()) {
+    // o servidor HTTPS põe o endereço de quem conectou nas extensões da requisição
+    let origem = partes.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
+    match estado.acesso.parear(&pedido.codigo, &nome, agora(), origem) {
         Pareamento_::Pareado(p) => {
             println!("\ndispositivo pareado: {} (id {})", estado.acesso.dispositivos().nome_de(&p.id), p.id);
             Json(json!({ "token": p.token, "id": p.id })).into_response()
         }
         Pareamento_::Incorreto => erro(StatusCode::UNAUTHORIZED, "código incorreto ou expirado"),
+        Pareamento_::Fechado => erro(
+            StatusCode::FORBIDDEN,
+            "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo",
+        ),
         Pareamento_::Bloqueado { segundos } => (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, segundos.to_string())],

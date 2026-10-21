@@ -11,7 +11,10 @@ use tokio::{
 };
 use tokio_rustls::TlsConnector;
 use tokio_tungstenite::{Connector, connect_async_tls_with_config};
-use vpad::{https::servir, tls};
+use vpad::{
+    acesso::Acesso, alerta::Alerta, armazem::ArmazemMapa, dispositivos::Dispositivos, https::servir,
+    pareamento::Pareamento, tls,
+};
 
 struct Servidor {
     porta: u16,
@@ -126,4 +129,48 @@ async fn atende_varias_conexoes_ao_mesmo_tempo() {
     let s = servidor("varias").await;
     let respostas = futures_util::future::join_all((0..8).map(|_| pedir(&s, "/manifest.webmanifest"))).await;
     assert!(respostas.iter().all(|r| r.starts_with("HTTP/1.1 200")));
+}
+
+#[tokio::test]
+async fn o_alerta_de_pareamento_leva_o_ip_real_de_quem_conectou_por_https() {
+    let pasta = std::env::temp_dir().join(format!("vpad-https-{}-ip", std::process::id())).join("tls");
+    let _ = fs::remove_dir_all(pasta.parent().unwrap());
+    let agora = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    let material = tls::carregar_ou_criar(&pasta, &["127.0.0.1".parse::<IpAddr>().unwrap()], agora).unwrap();
+
+    let vistos = Arc::new(std::sync::Mutex::new(vec![]));
+    let destino = vistos.clone();
+    let acesso = Acesso::com_alertas(
+        Dispositivos::em_memoria(),
+        Pareamento::com_segredo(b"segredo-de-teste-123".to_vec()),
+        Duration::from_secs(6),
+        Arc::new(move |a| destino.lock().unwrap().push(a)),
+    );
+    acesso.pareamento().abrir(agora, 600);
+    let app = vpad::app_com(
+        tokio::sync::mpsc::unbounded_channel().0,
+        tokio::sync::watch::channel(0).1,
+        Arc::new(ArmazemMapa::em_memoria()),
+        acesso,
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let porta = listener.local_addr().unwrap().port();
+    tokio::spawn(servir(listener, tls::config_do_servidor(&material).unwrap(), app));
+
+    let s = Servidor { porta, ca_der: material.ca_der.clone(), pasta: pasta.clone() };
+    let mut tls = conectar(&s, cliente(Some(&s.ca_der), &[b"http/1.1"])).await.unwrap();
+    let corpo = r#"{"codigo":"000000"}"#;
+    let req = format!(
+        "POST /api/parear HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{corpo}",
+        corpo.len()
+    );
+    tls.write_all(req.as_bytes()).await.unwrap();
+    let mut resposta = String::new();
+    let _ = tokio::time::timeout(Duration::from_secs(3), tls.read_to_string(&mut resposta)).await;
+    assert!(resposta.starts_with("HTTP/1.1 401"), "{resposta}");
+
+    let alertas = vistos.lock().unwrap();
+    assert_eq!(alertas.len(), 1, "{alertas:?}");
+    let Alerta::CodigoErrado { origem, .. } = &alertas[0] else { panic!("{alertas:?}") };
+    assert_eq!(*origem, Some("127.0.0.1".parse().unwrap()), "o IP de quem conectou chega até o alerta");
 }

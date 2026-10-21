@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use tokio::sync::{mpsc, watch};
 use tower::ServiceExt;
 use vpad::{
-    acesso::Acesso, armazem::ArmazemMapa, dispositivos::Dispositivos, mapa::Mapa, pareamento::Pareamento,
+    acesso::Acesso, alerta::Alerta, armazem::ArmazemMapa, dispositivos::Dispositivos, mapa::Mapa,
+    pareamento::Pareamento,
 };
 
 struct Ambiente {
@@ -19,6 +20,7 @@ struct Ambiente {
     armazem: Arc<ArmazemMapa>,
     /// token de um aparelho já pareado
     token: String,
+    alertas: Arc<std::sync::Mutex<Vec<Alerta>>>,
 }
 
 fn agora() -> u64 {
@@ -26,14 +28,18 @@ fn agora() -> u64 {
 }
 
 fn ambiente_com(armazem: Arc<ArmazemMapa>) -> Ambiente {
-    let acesso = Acesso::novo(
+    let alertas = Arc::new(std::sync::Mutex::new(vec![]));
+    let destino = alertas.clone();
+    let acesso = Acesso::com_alertas(
         Dispositivos::em_memoria(),
         Pareamento::com_segredo(b"segredo-de-teste-123".to_vec()),
         Duration::from_secs(6),
+        Arc::new(move |a| destino.lock().unwrap().push(a)),
     );
+    // o pareamento nasce fechado; os testes que pareiam o abrem
     let token = acesso.dispositivos().parear("teste", 0).unwrap().token;
     let app = vpad::app_com(mpsc::unbounded_channel().0, watch::channel(0).1, armazem.clone(), acesso.clone());
-    Ambiente { app, acesso, armazem, token }
+    Ambiente { app, acesso, armazem, token, alertas }
 }
 
 fn ambiente() -> Ambiente {
@@ -200,6 +206,11 @@ async fn aparelho_revogado_perde_o_acesso_a_api() {
 // ---------- pareamento ----------
 
 async fn parear(a: &Ambiente, codigo: &str, nome: Option<&str>) -> (StatusCode, header::HeaderMap, Value) {
+    a.acesso.pareamento().abrir(agora(), 3600); // o PC abriu o pareamento
+    parear_sem_abrir(a, codigo, nome).await
+}
+
+async fn parear_sem_abrir(a: &Ambiente, codigo: &str, nome: Option<&str>) -> (StatusCode, header::HeaderMap, Value) {
     let corpo = match nome {
         Some(n) => json!({"codigo": codigo, "nome": n}),
         None => json!({"codigo": codigo}),
@@ -289,4 +300,61 @@ async fn pareamento_so_aceita_post() {
     let a = ambiente();
     let (status, _, _) = chamar_com(&a.app, "GET", "/api/parear", None, None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+// ---------- pareamento fechado e alertas ----------
+
+#[tokio::test]
+async fn com_o_pareamento_fechado_o_codigo_certo_e_recusado_com_403_e_instrucao() {
+    let a = ambiente();
+    let antes = a.acesso.dispositivos().listar().len();
+    let (status, _, corpo) = parear_sem_abrir(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let erro = corpo["erro"].as_str().unwrap().to_lowercase();
+    assert!(erro.contains("fechado") && erro.contains("enter"), "{erro}");
+    assert_eq!(a.acesso.dispositivos().listar().len(), antes);
+}
+
+#[tokio::test]
+async fn abrir_o_pareamento_no_pc_libera_o_mesmo_codigo() {
+    let a = ambiente();
+    let codigo = codigo_certo(&a);
+    assert_eq!(parear_sem_abrir(&a, &codigo, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(parear(&a, &codigo, None).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn os_alertas_levam_o_ip_de_quem_tentou() {
+    let a = ambiente();
+    a.acesso.pareamento().abrir(agora(), 3600);
+    let origem: std::net::SocketAddr = "192.168.68.77:51234".parse().unwrap();
+    let corpo = json!({"codigo": codigo_errado(&a)}).to_string();
+    let mut req = Request::builder()
+        .method("POST")
+        .uri("/api/parear")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(corpo))
+        .unwrap();
+    req.extensions_mut().insert(axum::extract::ConnectInfo(origem));
+    let res = a.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    assert_eq!(
+        *a.alertas.lock().unwrap(),
+        vec![Alerta::CodigoErrado { origem: Some(origem.ip()), erros: 1 }]
+    );
+}
+
+#[tokio::test]
+async fn sem_informacao_de_origem_o_alerta_diz_que_e_desconhecida() {
+    let a = ambiente();
+    parear(&a, &codigo_errado(&a), None).await;
+    assert_eq!(*a.alertas.lock().unwrap(), vec![Alerta::CodigoErrado { origem: None, erros: 1 }]);
+}
+
+#[tokio::test]
+async fn tentativa_com_o_pareamento_fechado_tambem_gera_alerta() {
+    let a = ambiente();
+    parear_sem_abrir(&a, &codigo_certo(&a), None).await;
+    assert_eq!(*a.alertas.lock().unwrap(), vec![Alerta::PareamentoFechado { origem: None }]);
 }
