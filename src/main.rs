@@ -141,11 +141,12 @@ async fn main() -> io::Result<()> {
         e
     })?;
 
-    let (tx, rx) = mpsc::unbounded_channel();
+    let (tx, rx) = mpsc::channel(1024);
     let (perfil_tx, perfil_rx) = watch::channel(indice_do_perfil(perfil.id).unwrap_or(0));
     tokio::spawn(servico::processar(rx, perfil_tx, armazem.assinar(), fabrica, dispositivo));
 
-    // Aparelhos revogados por `vpad --revogar` (outro processo) deixam de valer aqui também.
+    // Aparelhos revogados por `vpad --revogar` (outro processo) deixam de valer aqui também:
+    // o inotify reage na hora e a releitura periódica cobre o caso de ele não estar disponível.
     let para_recarregar = acesso.clone();
     tokio::spawn(async move {
         let mut intervalo = tokio::time::interval(RECARGA_DOS_DISPOSITIVOS);
@@ -154,6 +155,10 @@ async fn main() -> io::Result<()> {
             para_recarregar.dispositivos().recarregar();
         }
     });
+    match vpad::vigiar_revogacoes(acesso.clone()) {
+        Ok(_) => {}
+        Err(e) => eprintln!("aviso: sem inotify ({e}); a revogação leva até 2 s"),
+    }
 
     // HTTPS com uma autoridade própria: o celular a instala uma vez (pela página de configuração).
     let Some(pasta_tls) = pasta_do_tls(xdg.as_deref(), home.as_deref()) else {

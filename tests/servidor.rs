@@ -59,3 +59,19 @@ async fn serve_o_icone_para_a_tela_inicial_do_iphone() {
     assert_eq!(res.status(), StatusCode::OK);
     assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
 }
+
+#[tokio::test]
+async fn toda_resposta_traz_cabecalhos_de_seguranca() {
+    for path in ["/", "/index.html", "/manifest.webmanifest", "/nao-existe.js"] {
+        let res = get(path).await;
+        let headers = res.headers();
+        let csp = headers[header::CONTENT_SECURITY_POLICY].to_str().unwrap();
+        assert!(csp.contains("default-src 'none'"), "{path}: {csp}");
+        assert!(csp.contains("script-src 'self'"), "{path}: {csp}");
+        assert!(csp.contains("frame-ancestors 'none'"), "{path}: {csp}");
+        assert_eq!(headers[header::X_CONTENT_TYPE_OPTIONS], "nosniff", "{path}");
+        assert_eq!(headers[header::X_FRAME_OPTIONS], "DENY", "{path}");
+        assert_eq!(headers[header::REFERRER_POLICY], "no-referrer", "{path}");
+        assert_eq!(headers[header::STRICT_TRANSPORT_SECURITY], "max-age=31536000", "{path}");
+    }
+}

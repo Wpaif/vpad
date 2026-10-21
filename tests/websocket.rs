@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{
-    mpsc::{self, UnboundedReceiver},
+    mpsc::{self, Receiver},
     watch,
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -22,7 +22,7 @@ type Cliente = tokio_tungstenite::WebSocketStream<
 struct Servidor {
     url: String,
     acesso: Arc<Acesso>,
-    eventos: UnboundedReceiver<Evento>,
+    eventos: Receiver<Evento>,
     perfil: watch::Sender<u8>,
 }
 
@@ -35,7 +35,7 @@ async fn servidor_com(inatividade: Duration) -> Servidor {
 }
 
 async fn servidor_completo(inatividade: Duration, prazo_da_aprovacao: Duration) -> Servidor {
-    let (tx, eventos) = mpsc::unbounded_channel();
+    let (tx, eventos) = mpsc::channel(64);
     let (perfil, perfil_rx) = watch::channel(0u8);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}/ws", listener.local_addr().unwrap());
@@ -107,14 +107,14 @@ async fn foi_encerrada(ws: &mut Cliente) -> bool {
     false
 }
 
-async fn proximo(rx: &mut UnboundedReceiver<Evento>) -> Evento {
+async fn proximo(rx: &mut Receiver<Evento>) -> Evento {
     tokio::time::timeout(Duration::from_secs(2), rx.recv())
         .await
         .expect("tempo esgotado esperando evento")
         .expect("canal fechado")
 }
 
-async fn silencio(rx: &mut UnboundedReceiver<Evento>) {
+async fn silencio(rx: &mut Receiver<Evento>) {
     assert!(
         tokio::time::timeout(Duration::from_millis(300), rx.recv()).await.is_err(),
         "não era para chegar nenhum evento"
@@ -522,4 +522,17 @@ async fn fora_do_modo_teclado_a_permissao_nao_muda_nada_para_o_gamepad() {
     let mut ws = conectar(&s, &sem).await;
     ws.send(botao(0, true)).await.unwrap();
     assert_eq!(proximo(&mut s.eventos).await, Evento::Botao { id: 0, pressionado: true });
+}
+
+#[tokio::test]
+async fn mensagem_maior_que_o_teto_encerra_a_conexao() {
+    let mut s = servidor().await;
+    let (_, token) = parear(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+
+    // o protocolo usa no máximo 9 bytes; 65 é lixo e não pode ser aceito
+    let _ = ws.send(Message::Binary(vec![1u8; 65].into())).await;
+
+    assert!(foi_encerrada(&mut ws).await);
+    assert_eq!(proximo(&mut s.eventos).await, Evento::SoltarTudo);
 }

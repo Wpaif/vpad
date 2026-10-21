@@ -24,11 +24,13 @@ pub mod teclas;
 
 use axum::{
     Router,
+    body::Body,
     extract::{
-        ConnectInfo, Query, State,
+        ConnectInfo, DefaultBodyLimit, Query, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::{StatusCode, Uri, header},
+    http::{HeaderValue, Request, StatusCode, Uri, header},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -37,7 +39,7 @@ use serde::Deserialize;
 use std::{net::{IpAddr, SocketAddr}, sync::Arc, time::Duration};
 use tokio::{
     sync::{
-        mpsc::{self, UnboundedSender},
+        mpsc::{self, Sender},
         watch,
     },
     time::{Instant, sleep_until},
@@ -76,7 +78,99 @@ async fn estatico(uri: Uri) -> Response {
     }
 }
 
-type Saida = UnboundedSender<Evento>;
+/// Uma mensagem só carrega um botão (3), um eixo (4), um ping (9) ou um perfil (2). O teto
+/// fica bem acima disso, mas longe de permitir que um cliente gere tráfego arbitrário.
+const TAMANHO_MAXIMO_DA_MENSAGEM: usize = 64;
+/// O maior corpo JSON aceito (o mapa de teclas inteiro tem poucos KB).
+const TAMANHO_MAXIMO_DO_CORPO: usize = 16 * 1024;
+
+type Saida = Sender<Evento>;
+
+/// O `Host` que o celular usou é um endereço desta rede local? Serve para barrar *DNS
+/// rebinding*: uma página da internet que resolve para o IP do PC manda outro nome e é recusada.
+fn host_permitido(host: &str) -> bool {
+    let host = host.trim_end_matches('.');
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return ip.is_loopback() || crate::tls::ip_permitido(ip);
+    }
+    let nome = host.to_ascii_lowercase();
+    nome == "localhost" || nome.ends_with(".local") || nome == crate::tls::nome_do_computador().to_ascii_lowercase()
+}
+
+/// O nome de um cabeçalho `Host`/`Origin`, sem porta e sem colchetes de IPv6.
+fn nome_do_host(valor: &str) -> Option<String> {
+    let valor = valor.trim();
+    if let Some(resto) = valor.strip_prefix('[') {
+        return resto.split(']').next().map(str::to_string).filter(|h| !h.is_empty());
+    }
+    let nome = valor.rsplit_once(':').map_or(valor, |(nome, _porta)| nome);
+    (!nome.is_empty()).then(|| nome.to_string())
+}
+
+/// A `Origin` é de uma página servida por este mesmo PC? Sem `Origin` (clientes que não são
+/// navegador) não há o que conferir. `Origin: null` e páginas da internet são recusadas.
+fn origem_permitida(origem: &str) -> bool {
+    if origem == "null" {
+        return false;
+    }
+    let Ok(uri) = origem.parse::<Uri>() else { return false };
+    if uri.scheme_str() != Some("https") {
+        return false;
+    }
+    uri.host().is_some_and(host_permitido)
+}
+
+/// Porteiro de todas as rotas: só aceita pedidos endereçados a esta rede local e vindos de
+/// uma página dela. É o que impede um site qualquer de falar com o vpad pela rede.
+async fn porteiro(State(_estado): State<Estado>, pedido: Request<Body>, seguinte: Next) -> Response {
+    if let Some(host) = pedido.headers().get(header::HOST) {
+        match host.to_str().ok().and_then(nome_do_host) {
+            Some(nome) if host_permitido(&nome) => {}
+            _ => return (StatusCode::MISDIRECTED_REQUEST, "Host não permitido").into_response(),
+        }
+    }
+    if let Some(origem) = pedido.headers().get(header::ORIGIN) {
+        match origem.to_str() {
+            Ok(origem) if origem_permitida(origem) => {}
+            _ => return (StatusCode::FORBIDDEN, "Origin não permitido").into_response(),
+        }
+    }
+    seguinte.run(pedido).await
+}
+
+/// Autentica antes de o corpo da requisição ser lido: um token inválido não chega a fazer o
+/// servidor interpretar (nem guardar) o JSON enviado.
+async fn exigir_token_do_teclado(State(estado): State<Estado>, pedido: Request<Body>, seguinte: Next) -> Response {
+    match crate::api::exigir_teclado(&estado, pedido.headers()) {
+        Ok(()) => seguinte.run(pedido).await,
+        Err(resposta) => resposta,
+    }
+}
+
+/// Cabeçalhos de segurança em toda resposta do HTTPS.
+async fn cabecalhos_de_seguranca(mut resposta: Response) -> Response {
+    let cabecalhos = resposta.headers_mut();
+    cabecalhos.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; \
+             connect-src 'self' wss:; manifest-src 'self'; base-uri 'none'; form-action 'self'; \
+             frame-ancestors 'none'",
+        ),
+    );
+    cabecalhos.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
+    cabecalhos.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    cabecalhos.insert(header::REFERRER_POLICY, HeaderValue::from_static("no-referrer"));
+    cabecalhos.insert(
+        header::HeaderName::from_static("permissions-policy"),
+        HeaderValue::from_static("camera=(), microphone=(), geolocation=(), payment=(), usb=()"),
+    );
+    cabecalhos.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000"),
+    );
+    resposta
+}
 
 #[derive(Clone)]
 struct Estado {
@@ -100,7 +194,9 @@ async fn rota_ws(
     partes: axum::http::request::Parts,
 ) -> Response {
     let origem = partes.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
-    ws.on_upgrade(move |socket| conexao(socket, estado, parametros, origem))
+    ws.max_message_size(TAMANHO_MAXIMO_DA_MENSAGEM)
+        .max_frame_size(TAMANHO_MAXIMO_DA_MENSAGEM)
+        .on_upgrade(move |socket| conexao(socket, estado, parametros, origem))
 }
 
 async fn avisar_perfil(ws: &mut WebSocket, indice: u8) -> Result<(), axum::Error> {
@@ -134,7 +230,7 @@ async fn pedir_teclado(
     token: &str,
     indice: u8,
     origem: Option<IpAddr>,
-    retorno: &UnboundedSender<Vec<u8>>,
+    retorno: &mpsc::Sender<Vec<u8>>,
     ativacao: &mut Option<tokio::task::JoinHandle<()>>,
 ) -> Result<(), axum::Error> {
     let acesso = &estado.acesso;
@@ -143,7 +239,7 @@ async fn pedir_teclado(
         return enviar(ws, codificar_aviso_de_perfil(AvisoDePerfil::SemPermissao)).await;
     }
     if *estado.perfil.borrow() == indice {
-        let _ = estado.saida.send(Evento::TrocarPerfil(indice)); // já está no modo teclado
+        let _ = estado.saida.send(Evento::TrocarPerfil(indice)).await; // já está no modo teclado
         return Ok(());
     }
     if ativacao.as_ref().is_some_and(|tarefa| !tarefa.is_finished()) {
@@ -162,14 +258,14 @@ async fn pedir_teclado(
         let pedido = Pedido { id: 0, tipo: Tipo_::AtivarTeclado { nome: aparelho.nome }, origem };
         let aviso = match aprovacoes.solicitar(pedido, prazo).await {
             Ok(Decisao::Aprovado { .. }) => {
-                let _ = saida.send(Evento::TrocarPerfil(indice));
+                let _ = saida.send(Evento::TrocarPerfil(indice)).await;
                 return;
             }
             Ok(Decisao::Negado) => AvisoDePerfil::Negado,
             Ok(Decisao::Expirou) => AvisoDePerfil::Expirou,
             Err(Ocupado) => AvisoDePerfil::Ocupado,
         };
-        let _ = retorno.send(codificar_aviso_de_perfil(aviso).to_vec());
+        let _ = retorno.send(codificar_aviso_de_perfil(aviso).to_vec()).await;
     }));
     Ok(())
 }
@@ -184,7 +280,7 @@ async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, or
     let mut perfil = estado.perfil.clone();
 
     // respostas do pedido de ativação do teclado, que espera o "sim" no PC em outra tarefa
-    let (retorno_tx, mut retorno_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+    let (retorno_tx, mut retorno_rx) = mpsc::channel::<Vec<u8>>(8);
     let mut ativacao: Option<tokio::task::JoinHandle<()>> = None;
 
     let atual = *perfil.borrow_and_update();
@@ -222,11 +318,11 @@ async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, or
                         // com o teclado ativo, só quem tem permissão digita; os outros seguem
                         // conectados e podem, por exemplo, trocar de perfil
                         Some(evento @ Evento::TrocarPerfil(_)) => {
-                            let _ = saida.send(evento);
+                            let _ = saida.send(evento).await;
                         }
                         Some(evento) => {
                             if permissoes.teclado || !modo_teclado_ativo(&perfil) {
-                                let _ = saida.send(evento);
+                                let _ = saida.send(evento).await;
                             }
                         }
                         None => {}
@@ -251,7 +347,7 @@ async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, or
         tarefa.abort();
     }
     // Soltar tudo evita botões "presos" se o celular some no meio de um toque.
-    let _ = saida.send(Evento::SoltarTudo);
+    let _ = saida.send(Evento::SoltarTudo).await;
 }
 
 /// Servidor cujos eventos de controle vão para `saida`; `perfil` informa o perfil ativo,
@@ -262,19 +358,49 @@ pub fn app_com(
     mapa: Arc<ArmazemMapa>,
     acesso: Arc<Acesso>,
 ) -> Router {
+    let estado = Estado { saida, perfil, mapa, acesso };
+    let teclado = get(api::obter)
+        .put(api::definir)
+        .route_layer(middleware::from_fn_with_state(estado.clone(), exigir_token_do_teclado));
     Router::new()
         .route("/ws", get(rota_ws))
         .route("/api/parear", post(api::parear))
-        .route("/api/teclado", get(api::obter).put(api::definir))
-        .with_state(Estado { saida, perfil, mapa, acesso })
+        .route("/api/teclado", teclado)
         .fallback(get(estatico))
+        .with_state(estado.clone())
+        .layer(middleware::from_fn_with_state(estado, porteiro))
+        .layer(middleware::map_response(cabecalhos_de_seguranca))
+        .layer(DefaultBodyLimit::max(TAMANHO_MAXIMO_DO_CORPO))
+}
+
+/// Vigia o arquivo do cadastro de aparelhos para que `vpad --revogar` (outro processo) valha
+/// no mesmo instante, sem esperar a releitura periódica. Devolve a tarefa que observa o
+/// arquivo; `None` quando o cadastro não está em disco (memória).
+pub fn vigiar_revogacoes(acesso: Arc<Acesso>) -> std::io::Result<Option<tokio::task::JoinHandle<()>>> {
+    use futures_util::StreamExt;
+    use inotify::{Inotify, WatchMask};
+
+    let Some(arquivo) = acesso.dispositivos().caminho().map(|c| c.to_path_buf()) else { return Ok(None) };
+    let Some(pasta) = arquivo.parent().map(|p| p.to_path_buf()) else { return Ok(None) };
+
+    let inotify = Inotify::init()?;
+    inotify.watches().add(&pasta, WatchMask::CLOSE_WRITE | WatchMask::MOVED_TO | WatchMask::CREATE)?;
+    let mut eventos = inotify.into_event_stream([0u8; 1024])?;
+    Ok(Some(tokio::spawn(async move {
+        while let Some(Ok(evento)) = eventos.next().await {
+            let do_arquivo = evento.name.as_deref().is_none_or(|nome| arquivo.file_name() == Some(nome));
+            if do_arquivo {
+                acesso.dispositivos().recarregar();
+            }
+        }
+    })))
 }
 
 /// Servidor que descarta os eventos (só serve a página). Ninguém está pareado, então nenhuma
 /// conexão de controle nem chamada à API é aceita.
 pub fn app() -> Router {
     app_com(
-        mpsc::unbounded_channel().0,
+        mpsc::channel(1).0,
         watch::channel(0).1,
         Arc::new(ArmazemMapa::em_memoria()),
         Acesso::novo(

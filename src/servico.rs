@@ -3,7 +3,7 @@
 
 use std::{io, sync::Arc};
 
-use tokio::sync::{mpsc::UnboundedReceiver, watch};
+use tokio::sync::{mpsc::Receiver, watch};
 
 use crate::{
     mapa::Mapa,
@@ -27,7 +27,7 @@ pub type Fabrica = Box<dyn Fn(&'static Perfil) -> io::Result<Box<dyn Dispositivo
 /// `mapa` é o mapa de teclas, entregue ao dispositivo ativo ao começar, a cada mudança e
 /// a cada dispositivo novo.
 pub async fn processar(
-    mut eventos: UnboundedReceiver<Evento>,
+    mut eventos: Receiver<Evento>,
     perfil: watch::Sender<u8>,
     mut mapa: watch::Receiver<Arc<Mapa>>,
     fabrica: Fabrica,
@@ -133,7 +133,7 @@ mod testes {
     ) -> Resultado {
         let registro: Registro = Default::default();
         let mapas: Mapas = Default::default();
-        let (tx, rx) = mpsc::unbounded_channel();
+        let (tx, rx) = mpsc::channel(16);
         let (perfil_tx, mut perfil_rx) = watch::channel(inicial);
         let (mapa_tx, mapa_rx) = watch::channel(Arc::new(Mapa::padrao()));
         let fab = fabrica(registro.clone(), mapas.clone(), falhar_em);
@@ -148,7 +148,7 @@ mod testes {
         });
 
         for e in eventos {
-            tx.send(e).unwrap();
+            tx.send(e).await.unwrap();
         }
         let servico = tokio::spawn(processar(rx, perfil_tx, mapa_rx, fab, inicial_dev));
         if mudar_mapa {
