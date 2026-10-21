@@ -14,7 +14,15 @@ export function lockGestures(): void {
   for (const type of ["gesturestart", "gesturechange", "dblclick", "contextmenu"]) {
     document.addEventListener(type, (e) => e.preventDefault());
   }
-  document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+  document.addEventListener(
+    "touchmove",
+    (e) => {
+      // o editor de teclas é uma lista que precisa rolar
+      if (e.target instanceof Element && e.target.closest("[data-scroll]")) return;
+      e.preventDefault();
+    },
+    { passive: false },
+  );
 }
 
 const LABELS = {

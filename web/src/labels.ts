@@ -55,6 +55,7 @@ function render(el: HTMLElement, label: Label) {
     el.textContent = label.text ?? "";
   }
   el.toggleAttribute("data-symbol", [...(label.text ?? "")].length === 1);
+  el.removeAttribute("data-keycap");
   if (label.name) el.setAttribute("aria-label", label.name);
   else el.removeAttribute("aria-label");
 }
@@ -69,4 +70,26 @@ export function applyProfileLabels(pad: HTMLElement, profileId: string): boolean
   }
   pad.dataset.profile = profileId;
   return true;
+}
+
+interface KeyInfo {
+  id: string;
+  rotulo: string;
+}
+
+/** No modo teclado cada botão mostra a tecla que aciona (controle sem tecla mostra um traço). */
+export function applyKeyboardLabels(pad: HTMLElement, map: Record<string, string>, keys: readonly KeyInfo[]): void {
+  const names = new Map(keys.map((k) => [k.id, k.rotulo]));
+  const controls = Object.keys(LABELS.xbox360!) as Control[];
+  for (const control of controls) {
+    const el = pad.querySelector<HTMLElement>(selector(control));
+    if (!el) continue;
+    const keyId = map[control];
+    const name = keyId === undefined ? undefined : (names.get(keyId) ?? keyId);
+    el.textContent = name ?? "–";
+    el.setAttribute("aria-label", name === undefined ? "Sem tecla" : `Tecla ${name}`);
+    el.setAttribute("data-keycap", "");
+    el.removeAttribute("data-symbol");
+  }
+  pad.dataset.profile = "teclado";
 }
