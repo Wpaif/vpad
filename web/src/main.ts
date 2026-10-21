@@ -24,7 +24,9 @@ import {
   renderStats,
   renderStatus,
 } from "./ui";
-import { bindAppHeight, showViewportDebug } from "./viewport";
+import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
+import { mountLayoutBar } from "./layoutBar";
+import { mountLayoutEditor } from "./layoutEditor";
 
 const layoutStore = createLayoutStore();
 mount(Pad, {
@@ -32,6 +34,9 @@ mount(Pad, {
   props: {
     get layout() {
       return layoutStore.current;
+    },
+    get editing() {
+      return layoutStore.editing;
     },
   },
 });
@@ -128,6 +133,47 @@ function start(token: string) {
       draw();
       refresh = setInterval(draw, 500);
     }
+  });
+
+  // Modo edição: o painel fecha, a barra aparece e os grupos podem ser arrastados.
+  mountLayoutBar({
+    bar: document.getElementById("layout-bar")!,
+    editButton: document.getElementById("edit-layout")!,
+    store: layoutStore,
+    onChange: () => {
+      if (!layoutStore.editing) return;
+      statsEl.hidden = true;
+      clearInterval(refresh);
+    },
+  });
+  const guia = (eixo: "x" | "y") => {
+    const el = document.createElement("div");
+    el.className = `guia guia-${eixo}`;
+    el.hidden = true;
+    document.body.append(el);
+    return el;
+  };
+  const guiaX = guia("x");
+  const guiaY = guia("y");
+  mountLayoutEditor({
+    pad,
+    store: layoutStore,
+    appSize: () => ({ w: window.innerWidth, h: window.innerHeight }),
+    bounds: () => {
+      const safe = readSafeArea(document);
+      return {
+        left: safe.left,
+        top: safe.top,
+        right: window.innerWidth - safe.right,
+        bottom: window.innerHeight - safe.bottom,
+      };
+    },
+    onGuides: (x, y) => {
+      guiaX.hidden = x === null;
+      if (x !== null) guiaX.style.left = `${x}px`;
+      guiaY.hidden = y === null;
+      if (y !== null) guiaY.style.top = `${y}px`;
+    },
   });
 
   const link = connect({

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adjustOf, defaultLayout, isHidden, type ControlId, type GroupId, type Layout } from "./layoutModel";
 
-  let { layout = defaultLayout() }: { layout?: Layout } = $props();
+  let { layout = defaultLayout(), editing = false }: { layout?: Layout; editing?: boolean } = $props();
 
   const oculto = (c: ControlId) => isHidden(layout, c);
   /** Sem ajuste não há transform, para o padrão continuar exatamente o do CSS. */
@@ -18,7 +18,7 @@
   `data-btn`, `data-trigger` e `data-stick` são o que o controle de toque e o protocolo usam.
   Os estilos ficam em style.css; os rótulos de cada perfil são aplicados depois, por labels.ts.
 -->
-<main id="pad" aria-label="Controle virtual">
+<main id="pad" aria-label="Controle virtual" data-editando={editing ? "" : undefined}>
   <section class="zone left">
     <div class="shoulders" data-grupo="ombros-esq" style:transform={mover("ombros-esq")}>
       <button class:oculto={oculto("LT")} class="shoulder" data-trigger="LT">LT</button>

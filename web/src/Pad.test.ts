@@ -125,3 +125,14 @@ describe("Pad com layout", () => {
     expect(t).toContain("scale(1.5)");
   });
 });
+
+describe("Pad em edição", () => {
+  it("só marca data-editando quando editing é verdadeiro", () => {
+    expect(pad.hasAttribute("data-editando")).toBe(false);
+    unmount(app);
+    document.body.innerHTML = `<div id="app"></div>`;
+    app = mount(Pad, { target: document.getElementById("app")!, props: { editing: true } });
+    pad = document.getElementById("pad")!;
+    expect(pad.hasAttribute("data-editando")).toBe(true);
+  });
+});

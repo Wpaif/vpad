@@ -437,3 +437,35 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
   visibility: hidden;
   pointer-events: none;
 }
+
+/* modo edição do layout */
+#pad[data-editando] { touch-action: none; }
+#pad[data-editando] [data-grupo] {
+  outline: 1.5px dashed var(--accent);
+  outline-offset: 4px;
+  cursor: grab;
+}
+#pad[data-editando] button { pointer-events: none; }
+.layout-bar {
+  position: fixed;
+  /* o centro é o espaço livre do layout padrão; embaixo cobriria o menu */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: rgba(20, 22, 30, 0.85);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
+}
+.layout-bar[hidden] { display: none; }
+.layout-bar button { height: 30px; padding: 0 12px; border-radius: 9px; font-size: 12px; }
+.layout-bar .primary { background: var(--accent); color: #0b0d14; }
+.layout-note { color: #ffb4a8; }
+.guia { position: fixed; z-index: 15; background: var(--accent); pointer-events: none; }
+.guia-x { top: 0; bottom: 0; width: 1px; }
+.guia-y { left: 0; right: 0; height: 1px; }
