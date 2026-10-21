@@ -79,7 +79,8 @@ fn ler(arquivo: &Path) -> Result<Vec<Guardado>, String> {
     }
 }
 
-fn limpar_nome(nome: &str) -> String {
+/// Nome sem caracteres de controle (que poderiam mexer no terminal), com até 40 caracteres.
+pub fn limpar_nome(nome: &str) -> String {
     let limpo: String = nome.chars().filter(|c| !c.is_control()).collect();
     let limpo: String = limpo.trim().chars().take(NOME_MAXIMO).collect();
     let limpo = limpo.trim_end().to_string();

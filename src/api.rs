@@ -101,15 +101,22 @@ pub(crate) async fn parear(
     let nome = pedido.nome.unwrap_or_default();
     // o servidor HTTPS põe o endereço de quem conectou nas extensões da requisição
     let origem = partes.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
-    match estado.acesso.parear(&pedido.codigo, &nome, agora(), origem) {
-        Pareamento_::Pareado(p) => {
-            println!("\ndispositivo pareado: {} (id {})", estado.acesso.dispositivos().nome_de(&p.id), p.id);
-            Json(json!({ "token": p.token, "id": p.id })).into_response()
-        }
+    // com o código certo, a resposta só sai depois que quem está no PC aprova (ou não)
+    match estado.acesso.parear(&pedido.codigo, &nome, agora(), origem).await {
+        Pareamento_::Pareado(p) => Json(json!({ "token": p.token, "id": p.id })).into_response(),
         Pareamento_::Incorreto => erro(StatusCode::UNAUTHORIZED, "código incorreto ou expirado"),
         Pareamento_::Fechado => erro(
             StatusCode::FORBIDDEN,
             "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo",
+        ),
+        Pareamento_::Negado => erro(StatusCode::FORBIDDEN, "o pedido foi negado no PC"),
+        Pareamento_::Expirou => erro(
+            StatusCode::REQUEST_TIMEOUT,
+            "ninguém aprovou o pedido no PC a tempo: abra o pareamento e tente de novo",
+        ),
+        Pareamento_::Ocupado => erro(
+            StatusCode::CONFLICT,
+            "já há outro pedido de pareamento aguardando aprovação no PC",
         ),
         Pareamento_::Bloqueado { segundos } => (
             StatusCode::TOO_MANY_REQUESTS,

@@ -11,6 +11,12 @@ pub enum Alerta {
     Bloqueado { origem: Option<IpAddr>, segundos: u64 },
     /// alguém tentou parear com o pareamento fechado
     PareamentoFechado { origem: Option<IpAddr> },
+    /// um aparelho novo foi pareado (depois da aprovação no PC)
+    Pareado { nome: String, id: String, origem: Option<IpAddr> },
+    /// o pedido de pareamento foi negado no PC
+    PareamentoNegado { origem: Option<IpAddr> },
+    /// ninguém aprovou o pedido de pareamento a tempo
+    PareamentoExpirou { origem: Option<IpAddr> },
 }
 
 fn origem(o: &Option<IpAddr>) -> String {
@@ -35,6 +41,13 @@ impl fmt::Display for Alerta {
                 "⚠ tentativa de pareamento ({}), mas o pareamento está fechado; pressione Enter para abrir",
                 origem(o)
             ),
+            Alerta::Pareado { nome, id, origem: o } => {
+                write!(f, "✓ dispositivo pareado: '{nome}' (id {id}, {})", origem(o))
+            }
+            Alerta::PareamentoNegado { origem: o } => write!(f, "pedido de pareamento negado ({})", origem(o)),
+            Alerta::PareamentoExpirou { origem: o } => {
+                write!(f, "pedido de pareamento expirou sem resposta ({})", origem(o))
+            }
         }
     }
 }
@@ -74,6 +87,16 @@ mod testes {
         let texto = Alerta::PareamentoFechado { origem: ip("10.0.0.9") }.to_string();
         assert!(texto.contains("10.0.0.9") && texto.to_lowercase().contains("fechado"), "{texto}");
         assert!(texto.contains("Enter"), "{texto}");
+    }
+
+    #[test]
+    fn os_resultados_do_pedido_dizem_o_que_aconteceu_e_de_onde() {
+        let pareado = Alerta::Pareado { nome: "iPhone".into(), id: "ab12cd34".into(), origem: ip("10.0.0.9") }.to_string();
+        assert!(pareado.contains("iPhone") && pareado.contains("ab12cd34") && pareado.contains("10.0.0.9"), "{pareado}");
+        let negado = Alerta::PareamentoNegado { origem: ip("10.0.0.9") }.to_string();
+        assert!(negado.contains("negado") && negado.contains("10.0.0.9"), "{negado}");
+        let expirou = Alerta::PareamentoExpirou { origem: ip("10.0.0.9") }.to_string();
+        assert!(expirou.contains("expirou") && expirou.contains("10.0.0.9"), "{expirou}");
     }
 
     #[test]
