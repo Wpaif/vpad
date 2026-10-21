@@ -103,32 +103,68 @@ impl Perfil {
     }
 }
 
+/// Quem revogar.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Alvo {
+    Todos,
+    Id(String),
+}
+
+/// O que o programa deve fazer.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Acao {
+    /// subir o servidor (o padrão)
+    Servir,
+    /// mostrar os aparelhos pareados e sair
+    ListarDispositivos,
+    /// revogar o acesso de aparelhos pareados e sair
+    Revogar(Alvo),
+}
+
 /// O que a linha de comando pede.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Opcoes {
     pub perfil: &'static Perfil,
-    /// gerar outro token de acesso, invalidando o que o celular já tem
-    pub novo_token: bool,
+    pub acao: Acao,
 }
 
-/// Lê `--perfil <id>` (ou `--perfil=<id>`) e `--novo-token`, sem o nome do programa.
+/// Lê `--perfil <id>`, `--dispositivos` e `--revogar <id|todos>` (sem o nome do programa).
 /// O perfil padrão é o Xbox 360.
 pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<Opcoes, String> {
     let mut id = XBOX_360.id.to_string();
-    let mut novo_token = false;
+    let mut acao = Acao::Servir;
+    let definir_acao = |nova: Acao, atual: &mut Acao| -> Result<(), String> {
+        if *atual != Acao::Servir {
+            return Err(format!("use só uma ação por vez\n{}", uso()));
+        }
+        *atual = nova;
+        Ok(())
+    };
+    let alvo = |valor: &str| -> Result<Acao, String> {
+        match valor {
+            "" => Err("--revogar precisa de um id (ou 'todos')".to_string()),
+            "todos" => Ok(Acao::Revogar(Alvo::Todos)),
+            id => Ok(Acao::Revogar(Alvo::Id(id.to_string()))),
+        }
+    };
     while let Some(arg) = args.next() {
         if arg == "--perfil" {
             id = args.next().ok_or("--perfil precisa de um valor")?;
         } else if let Some(valor) = arg.strip_prefix("--perfil=") {
             id = valor.to_string();
-        } else if arg == "--novo-token" {
-            novo_token = true;
+        } else if arg == "--dispositivos" {
+            definir_acao(Acao::ListarDispositivos, &mut acao)?;
+        } else if arg == "--revogar" {
+            let valor = args.next().ok_or("--revogar precisa de um id (ou 'todos')")?;
+            definir_acao(alvo(&valor)?, &mut acao)?;
+        } else if let Some(valor) = arg.strip_prefix("--revogar=") {
+            definir_acao(alvo(valor)?, &mut acao)?;
         } else {
             return Err(format!("argumento desconhecido: {arg}\n{}", uso()));
         }
     }
     let perfil = Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))?;
-    Ok(Opcoes { perfil, novo_token })
+    Ok(Opcoes { perfil, acao })
 }
 
 /// Posição do perfil em `PERFIS`, que é o número trocado com o celular.
@@ -138,7 +174,10 @@ pub fn indice_do_perfil(id: &str) -> Option<u8> {
 
 fn uso() -> String {
     let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
-    format!("uso: vpad [--perfil <{}>] [--novo-token]", ids.join("|"))
+    format!(
+        "uso: vpad [--perfil <{}>]\n     vpad --dispositivos\n     vpad --revogar <id|todos>",
+        ids.join("|")
+    )
 }
 
 #[cfg(test)]
@@ -246,28 +285,45 @@ mod testes {
     }
 
     #[test]
-    fn por_padrao_reaproveita_o_token_salvo() {
-        assert!(!opcoes_dos_argumentos(args(&[])).unwrap().novo_token);
+    fn por_padrao_sobe_o_servidor() {
+        assert_eq!(opcoes_dos_argumentos(args(&[])).unwrap().acao, Acao::Servir);
+        assert_eq!(opcoes_dos_argumentos(args(&["--perfil", "ds4"])).unwrap().acao, Acao::Servir);
     }
 
     #[test]
-    fn novo_token_pode_vir_sozinho_ou_junto_do_perfil() {
-        let so = opcoes_dos_argumentos(args(&["--novo-token"])).unwrap();
-        assert!(so.novo_token);
-        assert_eq!(so.perfil.id, "xbox360");
-
-        let junto = opcoes_dos_argumentos(args(&["--perfil", "ds4", "--novo-token"])).unwrap();
-        assert!(junto.novo_token);
-        assert_eq!(junto.perfil.id, "ds4");
-
-        let invertido = opcoes_dos_argumentos(args(&["--novo-token", "--perfil=teclado"])).unwrap();
-        assert!(invertido.novo_token);
-        assert_eq!(invertido.perfil.id, "teclado");
+    fn dispositivos_pede_a_lista() {
+        assert_eq!(opcoes_dos_argumentos(args(&["--dispositivos"])).unwrap().acao, Acao::ListarDispositivos);
     }
 
     #[test]
-    fn a_mensagem_de_uso_cita_novo_token() {
+    fn revogar_aceita_um_id_ou_todos_nas_duas_formas() {
+        let alvo = |a: &[&str]| opcoes_dos_argumentos(args(a)).unwrap().acao;
+        assert_eq!(alvo(&["--revogar", "ab12cd34"]), Acao::Revogar(Alvo::Id("ab12cd34".into())));
+        assert_eq!(alvo(&["--revogar=ab12cd34"]), Acao::Revogar(Alvo::Id("ab12cd34".into())));
+        assert_eq!(alvo(&["--revogar", "todos"]), Acao::Revogar(Alvo::Todos));
+        assert_eq!(alvo(&["--revogar=todos"]), Acao::Revogar(Alvo::Todos));
+    }
+
+    #[test]
+    fn revogar_sem_valor_e_erro() {
+        assert!(opcoes_dos_argumentos(args(&["--revogar"])).is_err());
+        assert!(opcoes_dos_argumentos(args(&["--revogar="])).is_err());
+    }
+
+    #[test]
+    fn so_uma_acao_por_vez() {
+        let erro = opcoes_dos_argumentos(args(&["--dispositivos", "--revogar", "todos"])).unwrap_err();
+        assert!(erro.contains("uma ação"), "{erro}");
+    }
+
+    #[test]
+    fn o_token_unico_antigo_nao_existe_mais() {
+        assert!(opcoes_dos_argumentos(args(&["--novo-token"])).is_err());
+    }
+
+    #[test]
+    fn a_mensagem_de_uso_cita_as_novas_opcoes() {
         let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
-        assert!(erro.contains("--novo-token"), "{erro}");
+        assert!(erro.contains("--dispositivos") && erro.contains("--revogar"), "{erro}");
     }
 }

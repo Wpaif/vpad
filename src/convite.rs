@@ -1,10 +1,11 @@
-//! O convite para o celular: o endereço com o token e o QR code para escanear no terminal.
+//! O convite para o celular: o endereço da página e o QR code para escanear no terminal.
 
 use qrcode::{QrCode, render::unicode};
 
-/// Endereço que o celular abre. O token vai na query, e a página o guarda e o tira da barra.
-pub fn url_de_acesso(ip: &str, porta: u16, token: &str) -> String {
-    format!("http://{ip}:{porta}/?t={token}")
+/// Endereço que o celular abre. Não leva segredo: o celular se identifica digitando o código
+/// de pareamento.
+pub fn url_de_acesso(ip: &str, porta: u16) -> String {
+    format!("http://{ip}:{porta}/")
 }
 
 /// QR code em blocos Unicode, para mostrar no terminal. Vazio se o texto não couber num QR.
@@ -19,16 +20,14 @@ mod testes {
     use super::*;
 
     #[test]
-    fn url_de_acesso_leva_o_token_na_query() {
-        assert_eq!(
-            url_de_acesso("192.168.68.103", 8080, "abc123"),
-            "http://192.168.68.103:8080/?t=abc123"
-        );
+    fn a_url_do_convite_nao_leva_segredo_nenhum() {
+        // o acesso vem do código de pareamento digitado no celular, não da URL
+        assert_eq!(url_de_acesso("192.168.68.103", 8080), "http://192.168.68.103:8080/");
     }
 
     #[test]
     fn qr_code_vira_texto_com_varias_linhas_de_blocos() {
-        let qr = qr_em_texto("http://192.168.68.103:8080/?t=abc123");
+        let qr = qr_em_texto("http://192.168.68.103:8080/");
         assert!(qr.lines().count() > 10, "{qr}");
         assert!(qr.contains('█') || qr.contains('▀') || qr.contains('▄'));
     }

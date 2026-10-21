@@ -3,7 +3,7 @@
 //!   `[2, id, lo, hi]`   eixo, i16 little-endian (0..=3 analógicos, 4..=5 gatilhos 0..=255)
 //!   `[3, ..8 bytes]`    ping, devolvido igual ao celular
 //!   `[4, indice]`       perfil: o celular pede a troca e o servidor informa o perfil ativo
-//!   `[5, motivo]`       (servidor -> celular) acesso recusado: 1 = ocupado, 2 = não autorizado
+//!   `[5, 1]`            (servidor -> celular) acesso recusado: token ausente, inválido ou revogado
 
 use crate::perfil::PERFIS;
 
@@ -31,10 +31,8 @@ pub enum Evento {
 /// Por que o servidor recusou a conexão.
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Recusa {
-    /// outro aparelho já está controlando
-    Ocupado = 1,
-    /// token ausente ou errado
-    NaoAutorizado = 2,
+    /// token ausente, inválido ou de um aparelho revogado
+    NaoAutorizado = 1,
 }
 
 pub fn codificar_recusa(motivo: Recusa) -> [u8; 2] {
@@ -151,8 +149,7 @@ mod testes {
     }
 
     #[test]
-    fn codifica_os_motivos_de_recusa_para_o_celular() {
-        assert_eq!(codificar_recusa(Recusa::Ocupado), [5, 1]);
-        assert_eq!(codificar_recusa(Recusa::NaoAutorizado), [5, 2]);
+    fn codifica_a_recusa_para_o_celular() {
+        assert_eq!(codificar_recusa(Recusa::NaoAutorizado), [5, 1]);
     }
 }

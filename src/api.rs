@@ -7,11 +7,13 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
+use std::time::{SystemTime, UNIX_EPOCH};
 use serde_json::json;
 use std::collections::BTreeMap;
 
 use crate::{
     Estado,
+    acesso::Pareamento_,
     mapa::{Controle, Mapa},
     teclas::TECLAS,
 };
@@ -73,5 +75,35 @@ pub(crate) async fn definir(
     match estado.mapa.definir(mapa) {
         Ok(()) => Json(json!({ "mapa": salvo })).into_response(),
         Err(e) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct PedidoPareamento {
+    codigo: String,
+    nome: Option<String>,
+}
+
+fn agora() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Troca o código de 6 dígitos do terminal por um token exclusivo do aparelho. Não exige
+/// token (é assim que o aparelho consegue o primeiro), mas erra com limite de tentativas.
+pub(crate) async fn parear(State(estado): State<Estado>, Json(pedido): Json<PedidoPareamento>) -> Response {
+    let nome = pedido.nome.unwrap_or_default();
+    match estado.acesso.parear(&pedido.codigo, &nome, agora()) {
+        Pareamento_::Pareado(p) => {
+            println!("\ndispositivo pareado: {} (id {})", estado.acesso.dispositivos().nome_de(&p.id), p.id);
+            Json(json!({ "token": p.token, "id": p.id })).into_response()
+        }
+        Pareamento_::Incorreto => erro(StatusCode::UNAUTHORIZED, "código incorreto ou expirado"),
+        Pareamento_::Bloqueado { segundos } => (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, segundos.to_string())],
+            Json(json!({ "erro": "muitas tentativas erradas", "segundos": segundos })),
+        )
+            .into_response(),
+        Pareamento_::Falha(e) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
     }
 }
