@@ -12,6 +12,7 @@ const MSG_AXIS = 2;
 const MSG_PING = 3;
 const MSG_PROFILE = 4;
 const MSG_REFUSAL = 5;
+const MSG_PROFILE_NOTICE = 6;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -56,4 +57,19 @@ export type Refusal = "unauthorized";
 /** Recusa do servidor (token ausente, inválido ou revogado), ou null se a mensagem for outra. */
 export function decodeRefusal(data: Uint8Array): Refusal | null {
   return data.length === 2 && data[0] === MSG_REFUSAL && data[1] === 1 ? "unauthorized" : null;
+}
+
+/** O que aconteceu com o pedido de ativar o modo teclado (que o PC precisa confirmar). */
+export type ProfileNotice = "no-permission" | "waiting" | "denied" | "expired" | "busy";
+
+const NOTICES: Record<number, ProfileNotice> = {
+  1: "no-permission",
+  2: "waiting",
+  3: "denied",
+  4: "expired",
+  5: "busy",
+};
+
+export function decodeProfileNotice(data: Uint8Array): ProfileNotice | null {
+  return data.length === 2 && data[0] === MSG_PROFILE_NOTICE ? (NOTICES[data[1]!] ?? null) : null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Axis, Button, decodeProfile, decodeRefusal, encodeAxis, encodeButton, encodePing, encodeProfile } from "./protocol";
+import { Axis, Button, decodeProfile, decodeProfileNotice, decodeRefusal, encodeAxis, encodeButton, encodePing, encodeProfile } from "./protocol";
 
 describe("protocol", () => {
   it("codifica botão pressionado e solto", () => {
@@ -56,5 +56,19 @@ describe("protocol", () => {
     expect(decodeRefusal(Uint8Array.of(5, 9))).toBeNull();
     expect(decodeRefusal(Uint8Array.of(4, 1))).toBeNull();
     expect(decodeRefusal(Uint8Array.of(5))).toBeNull();
+  });
+
+  it("decodifica os avisos sobre o pedido de ativar o modo teclado", () => {
+    expect(decodeProfileNotice(Uint8Array.of(6, 1))).toBe("no-permission");
+    expect(decodeProfileNotice(Uint8Array.of(6, 2))).toBe("waiting");
+    expect(decodeProfileNotice(Uint8Array.of(6, 3))).toBe("denied");
+    expect(decodeProfileNotice(Uint8Array.of(6, 4))).toBe("expired");
+    expect(decodeProfileNotice(Uint8Array.of(6, 5))).toBe("busy");
+  });
+
+  it("ignora o que não é aviso de perfil", () => {
+    expect(decodeProfileNotice(Uint8Array.of(6, 9))).toBeNull();
+    expect(decodeProfileNotice(Uint8Array.of(5, 1))).toBeNull();
+    expect(decodeProfileNotice(Uint8Array.of(6))).toBeNull();
   });
 });

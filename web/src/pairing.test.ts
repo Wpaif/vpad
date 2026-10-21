@@ -13,13 +13,37 @@ function resposta(status: number, corpo: unknown, headers: Record<string, string
 describe("pairDevice", () => {
   it("envia o código e o nome do aparelho por POST e devolve o token", async () => {
     const fetchFn = vi.fn().mockResolvedValue(resposta(200, { token: TOKEN, id: "ab12cd34" }));
-    expect(await pairDevice("123456", "iPhone", fetchFn)).toBe(TOKEN);
+    expect(await pairDevice("123456", "iPhone", fetchFn)).toEqual({ token: TOKEN, id: "ab12cd34" });
 
     const [url, init] = fetchFn.mock.calls[0]!;
     expect(url).toBe("/api/parear");
     expect(init.method).toBe("POST");
     expect(init.headers["Content-Type"]).toBe("application/json");
     expect(JSON.parse(init.body)).toEqual({ codigo: "123456", nome: "iPhone" });
+  });
+
+  it("pareamento fechado: diz para abrir no PC com Enter", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(
+      resposta(403, { erro: "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo" }),
+    );
+    const erro = await pairDevice("123456", "iPhone", fetchFn).catch((e) => e);
+    expect(erro.message).toMatch(/fechado/i);
+    expect(erro.message).toMatch(/Enter/);
+  });
+
+  it("pedido negado no PC: diz que foi negado", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { erro: "o pedido foi negado no PC" }));
+    await expect(pairDevice("123456", "iPhone", fetchFn)).rejects.toThrow(/negado/i);
+  });
+
+  it("ninguém aprovou a tempo: manda abrir de novo no PC", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(408, { erro: "x" }));
+    await expect(pairDevice("123456", "iPhone", fetchFn)).rejects.toThrow(/aprov/i);
+  });
+
+  it("outro pedido esperando no PC: pede para tentar de novo", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(409, { erro: "x" }));
+    await expect(pairDevice("123456", "iPhone", fetchFn)).rejects.toThrow(/outro pedido/i);
   });
 
   it("código errado: pede para conferir o código do terminal", async () => {
@@ -122,14 +146,27 @@ describe("mountPairing", () => {
     expect(submit().disabled).toBe(true);
   });
 
-  it("código completo: pareia e entrega o token", async () => {
+  it("código completo: pareia e entrega o token e o id", async () => {
     vi.useRealTimers();
-    pair.mockResolvedValue(TOKEN);
+    pair.mockResolvedValue({ token: TOKEN, id: "ab12cd34" });
     digitar("123456");
     enviar();
     await flush();
     expect(pair).toHaveBeenCalledWith("123456");
-    expect(onPaired).toHaveBeenCalledWith(TOKEN);
+    expect(onPaired).toHaveBeenCalledWith({ token: TOKEN, id: "ab12cd34" });
+  });
+
+  it("enquanto espera, diz que o pedido precisa ser aprovado no PC", async () => {
+    vi.useRealTimers();
+    let resolver!: (r: { token: string; id: string }) => void;
+    pair.mockReturnValue(new Promise((r) => (resolver = r)));
+    digitar("123456");
+    enviar();
+    expect(alertEl().textContent).toMatch(/aprov/i);
+    expect(alertEl().textContent).toMatch(/PC/);
+    resolver({ token: TOKEN, id: "ab12cd34" });
+    await flush();
+    expect(alertEl().textContent).toBe("");
   });
 
   it("não envia código incompleto", async () => {
@@ -142,14 +179,14 @@ describe("mountPairing", () => {
 
   it("durante o envio o botão fica travado, para não mandar duas vezes", async () => {
     vi.useRealTimers();
-    let resolver!: (t: string) => void;
-    pair.mockReturnValue(new Promise<string>((r) => (resolver = r)));
+    let resolver!: (r: { token: string; id: string }) => void;
+    pair.mockReturnValue(new Promise<{ token: string; id: string }>((r) => (resolver = r)));
     digitar("123456");
     enviar();
     expect(submit().disabled).toBe(true);
     enviar();
     expect(pair).toHaveBeenCalledTimes(1);
-    resolver(TOKEN);
+    resolver({ token: TOKEN, id: "ab12cd34" });
     await flush();
   });
 
@@ -163,12 +200,12 @@ describe("mountPairing", () => {
     expect(input().value).toBe("");
     expect(onPaired).not.toHaveBeenCalled();
 
-    pair.mockResolvedValue(TOKEN);
+    pair.mockResolvedValue({ token: TOKEN, id: "ab12cd34" });
     digitar("654321");
     expect(submit().disabled).toBe(false);
     enviar();
     await flush();
-    expect(onPaired).toHaveBeenCalledWith(TOKEN);
+    expect(onPaired).toHaveBeenCalledWith({ token: TOKEN, id: "ab12cd34" });
     expect(alertEl().textContent).toBe("");
   });
 

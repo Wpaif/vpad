@@ -68,3 +68,12 @@ describe("dica de instalação", () => {
     expect(document.getElementById("install-hint")!.textContent).toMatch(/parear|código/i);
   });
 });
+
+describe("aviso do modo teclado no painel", () => {
+  it("fica dentro do painel, junto do seletor de perfil", () => {
+    const nota = document.getElementById("profile-note");
+    expect(nota).not.toBeNull();
+    expect(document.getElementById("stats")!.contains(nota)).toBe(true);
+    expect(nota!.getAttribute("role")).toBe("status");
+  });
+});

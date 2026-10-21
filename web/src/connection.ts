@@ -1,4 +1,12 @@
-import { decodePing, decodeProfile, decodeRefusal, encodePing, type Refusal } from "./protocol";
+import {
+  decodePing,
+  decodeProfile,
+  decodeProfileNotice,
+  decodeRefusal,
+  encodePing,
+  type ProfileNotice,
+  type Refusal,
+} from "./protocol";
 
 export type Status = "connecting" | "open" | "reconnecting" | "closed";
 
@@ -11,6 +19,8 @@ export interface Options {
   onProfile?: (index: number) => void;
   /** O servidor recusou (outro aparelho controlando, ou token errado): não adianta reconectar. */
   onRefused?: (reason: Refusal) => void;
+  /** Aviso do servidor sobre o pedido de ativar o modo teclado (permissão, confirmação no PC...). */
+  onProfileNotice?: (notice: ProfileNotice) => void;
   WebSocketImpl?: typeof WebSocket;
   pingEveryMs?: number;
   now?: () => number;
@@ -60,6 +70,11 @@ export function connect(opts: Options): Connection {
       const profile = decodeProfile(data);
       if (profile !== null) {
         opts.onProfile?.(profile);
+        return;
+      }
+      const notice = decodeProfileNotice(data);
+      if (notice !== null) {
+        opts.onProfileNotice?.(notice);
         return;
       }
       const refusal = decodeRefusal(data);

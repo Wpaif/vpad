@@ -66,6 +66,7 @@
     <div class="picker-row">
       <span class="label">controle</span>
       <div id="profile-picker" class="picker" role="group" aria-label="Perfil do controle"></div>
+      <p id="profile-note" class="note" role="status"></p>
       <button id="open-key-editor" class="link" type="button">Editar teclas…</button>
     </div>
     <dl>
@@ -86,7 +87,7 @@
   <div id="pair" class="gate" role="dialog" aria-modal="true" aria-label="Parear este aparelho" hidden>
     <form class="gate-box" autocomplete="off">
       <h1>Parear este aparelho</h1>
-      <p>Digite o código de 6 dígitos que aparece no terminal do PC. Ele muda a cada 30 segundos.</p>
+      <p>No PC, pressione <b>Enter</b> no terminal do vpad para abrir o pareamento. Digite aqui o código de 6 dígitos que aparece lá (ele muda a cada 30 segundos) e aprove o pedido no PC.</p>
       <input name="codigo" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
              autocomplete="one-time-code" placeholder="000000" aria-label="Código de pareamento">
       <button type="submit" disabled>Parear</button>

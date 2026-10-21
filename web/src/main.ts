@@ -1,5 +1,5 @@
 import "./style.css";
-import { clearToken, getToken, safeStorage, saveToken, wsUrl } from "./auth";
+import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsUrl } from "./auth";
 import { connect } from "./connection";
 import { bindController } from "./controller";
 import { mountKeyEditor } from "./editor";
@@ -8,6 +8,7 @@ import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
 import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
 import { deviceName, mountPairing, pairDevice } from "./pairing";
+import { describeNotice } from "./notice";
 import { mountProfilePicker } from "./picker";
 import { PROFILES } from "./profiles";
 import { encodeProfile } from "./protocol";
@@ -42,8 +43,9 @@ bindInstallHint(
 // token que recebe. O app da Tela de Início tem armazenamento próprio: ele pareia por conta própria.
 const pairing = mountPairing(document.getElementById("pair")!, {
   pair: (code) => pairDevice(code, deviceName(navigator.userAgent, navigator.maxTouchPoints)),
-  onPaired: (token) => {
+  onPaired: ({ token, id }) => {
     saveToken(storage, token);
+    if (id) saveDeviceId(storage, id);
     pairing.hide();
     start(token);
   },
@@ -89,6 +91,11 @@ function start(token: string) {
   });
   document.getElementById("open-key-editor")!.addEventListener("click", () => void editor.open());
 
+  const noteEl = document.getElementById("profile-note")!;
+  const showNote = (text: string) => {
+    noteEl.textContent = text; // textContent: nada do servidor vira HTML
+  };
+
   const picker = mountProfilePicker(document.getElementById("profile-picker")!, (i) =>
     link.send(encodeProfile(i)),
   );
@@ -115,7 +122,14 @@ function start(token: string) {
       renderStatus(statusEl, status, null);
     },
     onPingSent: (ts) => meter.sent(ts),
+    // O modo teclado digita no PC: sem permissão o servidor recusa, e com ela o PC pede confirmação.
+    onProfileNotice: (notice) => {
+      showNote(describeNotice(notice, getDeviceId(storage)));
+      if (notice === "waiting") picker.waitingForPc();
+      else picker.cancelPending();
+    },
     onProfile: (index) => {
+      showNote("");
       picker.setCurrent(index);
       profileId = PROFILES[index]?.id ?? null;
       refreshLabels();

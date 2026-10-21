@@ -234,3 +234,36 @@ describe("recusa do servidor", () => {
     expect(c.send(Uint8Array.of(1, 0, 1))).toBe(false);
   });
 });
+
+describe("avisos sobre o modo teclado", () => {
+  it("repassa o aviso do servidor", () => {
+    const avisos: string[] = [];
+    connect({
+      url: "ws://pc/ws",
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: () => {},
+      onLatency: () => {},
+      onProfileNotice: (a) => avisos.push(a),
+    });
+    last().open();
+    last().receive(Uint8Array.of(6, 2));
+    last().receive(Uint8Array.of(6, 3));
+    expect(avisos).toEqual(["waiting", "denied"]);
+  });
+
+  it("um aviso não conta como pong, perfil nem recusa", () => {
+    const motivos: string[] = [];
+    const c = connect({
+      url: "ws://pc/ws",
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: (s) => statuses.push(s),
+      onLatency: (ms) => latencies.push(ms),
+      onRefused: (m) => motivos.push(m),
+    });
+    last().open();
+    last().receive(Uint8Array.of(6, 1));
+    expect(latencies).toEqual([]);
+    expect(motivos).toEqual([]);
+    expect(c.send(Uint8Array.of(1, 0, 1))).toBe(true);
+  });
+});
