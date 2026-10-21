@@ -96,3 +96,15 @@ describe("gatilhos", () => {
     expect(sent).toEqual([[2, 4, 255, 0], [2, 4, 0, 0]]);
   });
 });
+
+describe("controle oculto", () => {
+  it("botão, gatilho e analógico ocultos ignoram o toque", () => {
+    const todos = ["[data-btn=A]", "[data-trigger=LT]", "[data-stick]"].map((q) => document.querySelector(q)!);
+    todos.forEach((el) => el.classList.add("oculto"));
+    todos.forEach((el, i) => {
+      ptr(el, "pointerdown", i + 1, 100, 10);
+      ptr(el, "pointerup", i + 1, 100, 10);
+    });
+    expect(sent).toEqual([]);
+  });
+});

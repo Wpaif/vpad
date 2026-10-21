@@ -1,11 +1,14 @@
 const ROTATION_RECHECK_MS = [100, 400];
 
 /**
- * Mantém --app-h igual à altura real da janela. No iOS as unidades dvh/100% ficam
+ * Mantém --app-h (e --app-w, base do deslocamento do layout) iguais ao tamanho real da janela. No iOS as unidades dvh/100% ficam
  * desatualizadas depois de girar o celular, deixando uma faixa sem pintar embaixo.
  */
 export function bindAppHeight(win: Window, root: HTMLElement): () => void {
-  const update = () => root.style.setProperty("--app-h", `${win.innerHeight}px`);
+  const update = () => {
+    root.style.setProperty("--app-h", `${win.innerHeight}px`);
+    root.style.setProperty("--app-w", `${win.innerWidth}px`);
+  };
   let timers: ReturnType<typeof setTimeout>[] = [];
 
   // O iOS ainda reporta a altura antiga no próprio evento de rotação.

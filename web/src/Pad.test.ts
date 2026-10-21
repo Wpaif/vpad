@@ -1,6 +1,7 @@
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Pad from "./Pad.svelte";
+import { defaultLayout, setHidden, withGroup, type Layout } from "./layoutModel";
 
 let app: ReturnType<typeof mount>;
 let pad: HTMLElement;
@@ -88,5 +89,39 @@ describe("Pad", () => {
     expect(texto("[data-trigger=LT]")).toBe("LT");
     expect(texto("[data-btn=Select]")).toBe("Select");
     expect(texto("[data-btn=Start]")).toBe("Start");
+  });
+});
+
+describe("Pad com layout", () => {
+  const montar = (layout: Layout) => {
+    unmount(app);
+    document.body.innerHTML = `<div id="app"></div>`;
+    app = mount(Pad, { target: document.getElementById("app")!, props: { layout } });
+    pad = document.getElementById("pad")!;
+  };
+
+  it("sem layout nada recebe transform nem classe oculto", () => {
+    expect(pad.querySelectorAll(".oculto").length).toBe(0);
+    for (const g of pad.querySelectorAll<HTMLElement>("[data-grupo]")) expect(g.style.transform).toBe("");
+  });
+
+  it("controle oculto ganha a classe e os outros não", () => {
+    montar(setHidden(defaultLayout(), "A", true));
+    expect(pad.querySelector("[data-btn=A]")!.classList.contains("oculto")).toBe(true);
+    expect(pad.querySelector("[data-btn=B]")!.classList.contains("oculto")).toBe(false);
+  });
+
+  it("analógico oculto marca o próprio elemento do analógico", () => {
+    montar(setHidden(defaultLayout(), "StickLeft", true));
+    expect(pad.querySelector("[data-stick=left]")!.classList.contains("oculto")).toBe(true);
+  });
+
+  it("grupo ajustado recebe translate e scale em função de --app-w/--app-h", () => {
+    montar(withGroup(defaultLayout(), "face", { dx: 0.1, dy: -0.05, scale: 1.5 }));
+    const t = pad.querySelector<HTMLElement>("[data-grupo=face]")!.style.transform;
+    expect(t).toContain("translate(");
+    expect(t).toContain("--app-w");
+    expect(t).toContain("--app-h");
+    expect(t).toContain("scale(1.5)");
   });
 });

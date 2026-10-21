@@ -28,7 +28,7 @@ function capture(el: Element, id: number) {
 function bindHold(el: HTMLElement, press: () => void, release: () => void) {
   const active = new Set<number>();
   el.addEventListener("pointerdown", (e) => {
-    if (active.has(e.pointerId)) return;
+    if (el.classList.contains("oculto") || active.has(e.pointerId)) return;
     active.add(e.pointerId);
     capture(el, e.pointerId);
     if (active.size === 1) {
@@ -79,7 +79,7 @@ function bindStick(el: HTMLElement, send: Send) {
   };
 
   el.addEventListener("pointerdown", (e) => {
-    if (owner !== null) return;
+    if (el.classList.contains("oculto") || owner !== null) return;
     owner = e.pointerId;
     capture(el, e.pointerId);
     el.setAttribute("data-pressed", "");

@@ -6,6 +6,7 @@ import { connect } from "./connection";
 import { bindController } from "./controller";
 import { mountKeyEditor } from "./editor";
 import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
+import { createLayoutStore } from "./layoutStore.svelte";
 import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
 import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
@@ -23,7 +24,15 @@ import {
 } from "./ui";
 import { bindAppHeight, showViewportDebug } from "./viewport";
 
-mount(Pad, { target: document.getElementById("app")! });
+const layoutStore = createLayoutStore();
+mount(Pad, {
+  target: document.getElementById("app")!,
+  props: {
+    get layout() {
+      return layoutStore.current;
+    },
+  },
+});
 
 const storage = safeStorage();
 const pad = document.getElementById("pad")!;
