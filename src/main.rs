@@ -156,12 +156,19 @@ async fn main() -> io::Result<()> {
     println!("perfil: {} ({:04x}:{:04x})", perfil.nome, perfil.fabricante, perfil.produto);
     println!("controle (HTTPS): {url}");
     println!("primeira vez neste celular? instale o certificado: {}", url_de_configuracao(&ip, porta));
-    if material.ca_nova {
+    if material.ca_antiga_sem_restricoes {
+        println!("AUTORIDADE ANTIGA (sem restrição de nomes) SUBSTITUÍDA por uma que só vale para a rede local:");
+        println!("remova o perfil vpad antigo do celular e instale o novo");
+    } else if material.ca_nova {
         println!("AUTORIDADE DE CERTIFICAÇÃO NOVA: instale o perfil de novo em cada celular que já tinha o antigo");
     } else if material.folha_renovada {
         println!("certificado do servidor renovado (IP novo ou perto de vencer); os celulares não precisam fazer nada");
     }
-    println!("certificado válido para: {}", ips.iter().map(ToString::to_string).collect::<Vec<_>>().join(", "));
+    for ip in &material.ips_ignorados {
+        eprintln!("aviso: o IP {ip} não é de rede local e ficou fora do certificado");
+    }
+    let cobertos: Vec<String> = ips.iter().filter(|i| !material.ips_ignorados.contains(i)).map(ToString::to_string).collect();
+    println!("certificado válido para: {}", cobertos.join(", "));
     println!("aparelhos pareados: {} (veja com: vpad --dispositivos)", acesso.dispositivos().listar().len());
     println!("para parear um aparelho novo, digite no celular o código abaixo:\n");
 
