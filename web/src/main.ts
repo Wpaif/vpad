@@ -1,5 +1,5 @@
 import "./style.css";
-import { getClientId, readToken, safeStorage, wsUrl } from "./auth";
+import { clearToken, getToken, safeStorage, saveToken, wsUrl } from "./auth";
 import { connect } from "./connection";
 import { bindController } from "./controller";
 import { mountKeyEditor } from "./editor";
@@ -7,6 +7,7 @@ import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
 import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
 import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
+import { deviceName, mountPairing, pairDevice } from "./pairing";
 import { mountProfilePicker } from "./picker";
 import { PROFILES } from "./profiles";
 import { encodeProfile } from "./protocol";
@@ -14,7 +15,6 @@ import {
   bindPanelToggle,
   bindVisibilityToggle,
   lockGestures,
-  renderGate,
   renderStats,
   renderStatus,
 } from "./ui";
@@ -22,12 +22,10 @@ import { bindAppHeight, showViewportDebug } from "./viewport";
 
 const storage = safeStorage();
 const pad = document.getElementById("pad")!;
-const gate = document.getElementById("gate")!;
 
 lockGestures();
 enterFullscreenOnTouch(document);
 bindAppHeight(window, document.documentElement);
-document.getElementById("gate-retry")!.addEventListener("click", () => location.reload());
 
 const standalone =
   (navigator as Navigator & { standalone?: boolean }).standalone === true ||
@@ -40,15 +38,22 @@ bindInstallHint(
   storage,
 );
 
-const token = readToken(location, storage);
-if (token === null) {
-  // Sem token não há o que tentar: o servidor recusaria. O QR code do terminal o traz.
-  renderGate(gate, "unauthorized", standalone);
-} else {
-  start(token, getClientId(storage));
-}
+// Cada aparelho se pareia uma vez, digitando o código que o terminal do PC mostra, e guarda o
+// token que recebe. O app da Tela de Início tem armazenamento próprio: ele pareia por conta própria.
+const pairing = mountPairing(document.getElementById("pair")!, {
+  pair: (code) => pairDevice(code, deviceName(navigator.userAgent, navigator.maxTouchPoints)),
+  onPaired: (token) => {
+    saveToken(storage, token);
+    pairing.hide();
+    start(token);
+  },
+});
 
-function start(token: string, clientId: string) {
+const saved = getToken(storage);
+if (saved === null) pairing.show();
+else start(saved);
+
+function start(token: string) {
   const now = () => performance.timeOrigin + performance.now();
   const statusEl = document.getElementById("status")!;
   const statsEl = document.getElementById("stats")!;
@@ -100,7 +105,7 @@ function start(token: string, clientId: string) {
   });
 
   const link = connect({
-    url: wsUrl(location, token, clientId),
+    url: wsUrl(location, token),
     now,
     onStatus: (status) => {
       if (status !== "open") {
@@ -115,7 +120,11 @@ function start(token: string, clientId: string) {
       profileId = PROFILES[index]?.id ?? null;
       refreshLabels();
     },
-    onRefused: (reason) => renderGate(gate, reason),
+    // O servidor não reconhece mais este aparelho (revogado): esquece o token e volta ao pareamento.
+    onRefused: () => {
+      clearToken(storage);
+      location.reload();
+    },
     onLatency: (_ms, sentAt) => {
       const ms = meter.received(sentAt, now());
       if (ms !== null) renderStatus(statusEl, "open", Math.round(ms));

@@ -19,9 +19,9 @@ describe("loadKeyboard", () => {
     expect(fetchFn).toHaveBeenCalledWith("/api/teclado", { headers: { Authorization: "Bearer tok" } });
   });
 
-  it("401 pede para escanear o QR code de novo", async () => {
+  it("401 pede para parear o aparelho de novo", async () => {
     const fetchFn = vi.fn().mockResolvedValue(resposta(401, { erro: "não autorizado" }));
-    await expect(loadKeyboard("errado", fetchFn)).rejects.toThrow(/QR/);
+    await expect(loadKeyboard("errado", fetchFn)).rejects.toThrow(/parear/i);
   });
 
   it("falha com mensagem clara se o servidor não responde ok", async () => {

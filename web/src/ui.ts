@@ -1,5 +1,4 @@
 import type { LatencySnapshot } from "./latency";
-import type { Refusal } from "./protocol";
 import { sparklinePoints } from "./sparkline";
 
 export function bindVisibilityToggle(toggle: HTMLElement, pad: HTMLElement): void {
@@ -62,26 +61,4 @@ export function bindPanelToggle(trigger: HTMLElement, panel: HTMLElement, onChan
     panel.hidden = !panel.hidden;
     onChange?.(!panel.hidden);
   });
-}
-
-const GATE_MESSAGES: Record<Refusal, string> = {
-  busy: "Outro aparelho está controlando o PC. Desconecte-o (ou espere ele sair) e tente de novo.",
-  unauthorized: "Acesso não autorizado. Escaneie o QR code mostrado no terminal do PC para abrir esta página.",
-};
-
-const GATE_INSTALLED_WITHOUT_TOKEN =
-  "Este app foi instalado sem o código de acesso. Apague o ícone, abra no Safari o link do QR code do terminal e adicione à Tela de Início de novo.";
-
-/** Mostra por que o servidor recusou este aparelho; null esconde a tela. */
-export function renderGate(gate: HTMLElement, reason: Refusal | null, installed = false): void {
-  gate.hidden = reason === null;
-  if (reason === null) {
-    delete gate.dataset.reason;
-    return;
-  }
-  gate.dataset.reason = reason;
-  const message = gate.querySelector("[data-role=message]");
-  if (message) {
-    message.textContent = reason === "unauthorized" && installed ? GATE_INSTALLED_WITHOUT_TOKEN : GATE_MESSAGES[reason];
-  }
 }

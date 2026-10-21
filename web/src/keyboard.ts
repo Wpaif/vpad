@@ -20,7 +20,7 @@ type FetchFn = typeof fetch;
 
 const URL = "/api/teclado";
 
-const DENIED = "acesso negado: escaneie o QR code do terminal do PC";
+const DENIED = "acesso negado: é preciso parear este aparelho de novo";
 
 export async function loadKeyboard(token: string, fetchFn: FetchFn = fetch): Promise<KeyboardConfig> {
   const res = await fetchFn(URL, { headers: { Authorization: `Bearer ${token}` } });

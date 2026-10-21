@@ -393,4 +393,20 @@ button[data-pressed] {
 .gate-box { display: grid; gap: 16px; max-width: 420px; text-align: center; }
 .gate-box p { margin: 0; font-size: 16px; line-height: 1.5; }
 .gate-box button { height: 40px; border-radius: 12px; font-size: 14px; }
-.gate[data-reason="busy"] .gate-box p::before { content: "🔒 "; }
+.gate-box h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.gate-box input {
+  height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 28px/1 ui-monospace, "SF Mono", monospace;
+  letter-spacing: 0.4em;
+  text-align: center;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+.gate-box input:focus { outline: 2px solid var(--accent); }
+.gate-box button:disabled { opacity: 0.4; }
+.pair-error { min-height: 20px; color: var(--b); font-size: 14px !important; }

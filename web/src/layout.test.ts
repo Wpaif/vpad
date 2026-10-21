@@ -41,19 +41,30 @@ describe("editor de teclas", () => {
   });
 });
 
-describe("tela de acesso recusado no HTML", () => {
-  it("existe, começa escondida, fora do controle e tem o botão de tentar de novo", () => {
-    const gate = document.getElementById("gate")!;
-    expect(gate.hidden).toBe(true);
-    expect(gate.getAttribute("role")).toBe("alertdialog");
-    expect(document.getElementById("pad")!.contains(gate)).toBe(false);
-    expect(gate.querySelector("[data-role=message]")).not.toBeNull();
-    expect(document.getElementById("gate-retry")).not.toBeNull();
+describe("tela de pareamento no HTML", () => {
+  it("existe, começa escondida e fica fora do controle", () => {
+    const pair = document.getElementById("pair")!;
+    expect(pair.hidden).toBe(true);
+    expect(pair.getAttribute("role")).toBe("dialog");
+    expect(document.getElementById("pad")!.contains(pair)).toBe(false);
+  });
+
+  it("tem um campo numérico de seis dígitos e o botão de parear", () => {
+    const input = document.querySelector<HTMLInputElement>("#pair input")!;
+    expect(input.getAttribute("inputmode")).toBe("numeric");
+    expect(input.getAttribute("maxlength")).toBe("6");
+    expect(input.getAttribute("autocomplete")).toBe("one-time-code");
+    expect(document.querySelector("#pair button[type=submit]")).not.toBeNull();
+    expect(document.querySelector("#pair [role=alert]")).not.toBeNull();
+  });
+
+  it("o antigo bloqueio de 'outro aparelho está controlando' não existe mais", () => {
+    expect(document.getElementById("gate")).toBeNull();
   });
 });
 
 describe("dica de instalação", () => {
-  it("manda abrir pelo link do QR code, para o atalho levar o código de acesso", () => {
-    expect(document.getElementById("install-hint")!.textContent).toMatch(/QR/);
+  it("avisa que o app instalado precisa ser pareado de novo, com o código do terminal", () => {
+    expect(document.getElementById("install-hint")!.textContent).toMatch(/parear|código/i);
   });
 });

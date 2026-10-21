@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderGate, renderStats, renderStatus } from "./ui";
+import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderStats, renderStatus } from "./ui";
 
 beforeEach(() => {
   document.body.innerHTML = `
@@ -128,44 +128,5 @@ describe("lockGestures", () => {
     lockGestures();
     expect(tocar(document.getElementById("dentro")!).defaultPrevented).toBe(false);
     expect(tocar(document.getElementById("fora")!).defaultPrevented).toBe(true);
-  });
-});
-
-describe("tela de acesso recusado", () => {
-  beforeEach(() => {
-    document.body.innerHTML = `<div id="gate" hidden><p data-role="message"></p></div>`;
-  });
-  const gate = () => document.getElementById("gate")!;
-  const message = () => gate().querySelector("[data-role=message]")!.textContent!;
-
-  it("ocupado: diz que outro aparelho está controlando", () => {
-    renderGate(gate(), "busy");
-    expect(gate().hidden).toBe(false);
-    expect(message()).toMatch(/outro aparelho/i);
-    expect(gate().dataset.reason).toBe("busy");
-  });
-
-  it("não autorizado: manda escanear o QR code do terminal", () => {
-    renderGate(gate(), "unauthorized");
-    expect(gate().hidden).toBe(false);
-    expect(message()).toMatch(/QR/);
-  });
-
-  it("app da Tela de Início sem token: explica que o ícone foi criado sem o código", () => {
-    renderGate(gate(), "unauthorized", true);
-    expect(message()).toMatch(/instalado sem o código/i);
-    expect(message()).toMatch(/Safari/);
-    expect(message()).toMatch(/QR/);
-  });
-
-  it("no Safari comum a mensagem de não autorizado continua a de escanear o QR code", () => {
-    renderGate(gate(), "unauthorized", false);
-    expect(message()).not.toMatch(/instalado/i);
-  });
-
-  it("null esconde a tela", () => {
-    renderGate(gate(), "busy");
-    renderGate(gate(), null);
-    expect(gate().hidden).toBe(true);
   });
 });

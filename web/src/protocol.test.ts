@@ -47,12 +47,12 @@ describe("protocol", () => {
     expect(decodeProfile(Uint8Array.of(4, 1, 1))).toBeNull();
   });
 
-  it("decodifica o motivo de recusa do servidor", () => {
-    expect(decodeRefusal(Uint8Array.of(5, 1))).toBe("busy");
-    expect(decodeRefusal(Uint8Array.of(5, 2))).toBe("unauthorized");
+  it("decodifica a recusa do servidor (token ausente, inválido ou revogado)", () => {
+    expect(decodeRefusal(Uint8Array.of(5, 1))).toBe("unauthorized");
   });
 
   it("ignora o que não é recusa", () => {
+    expect(decodeRefusal(Uint8Array.of(5, 2))).toBeNull(); // o antigo 'ocupado' não existe mais
     expect(decodeRefusal(Uint8Array.of(5, 9))).toBeNull();
     expect(decodeRefusal(Uint8Array.of(4, 1))).toBeNull();
     expect(decodeRefusal(Uint8Array.of(5))).toBeNull();

@@ -207,26 +207,16 @@ describe("recusa do servidor", () => {
     return { c, motivos };
   }
 
-  it("avisa o motivo e não tenta reconectar quando o servidor fecha em seguida", () => {
+  it("avisa que não tem acesso e não tenta reconectar quando o servidor fecha em seguida", () => {
     const { motivos } = iniciar();
     last().open();
     last().receive(Uint8Array.of(5, 1));
     last().close();
     vi.advanceTimersByTime(60_000);
 
-    expect(motivos).toEqual(["busy"]);
-    expect(FakeSocket.instances.length).toBe(1);
-    expect(statuses.at(-1)).toBe("closed");
-  });
-
-  it("não autorizado também para de tentar", () => {
-    const { motivos } = iniciar();
-    last().open();
-    last().receive(Uint8Array.of(5, 2));
-    last().close();
-    vi.advanceTimersByTime(60_000);
     expect(motivos).toEqual(["unauthorized"]);
     expect(FakeSocket.instances.length).toBe(1);
+    expect(statuses.at(-1)).toBe("closed");
   });
 
   it("depois de recusado não manda mais ping", () => {

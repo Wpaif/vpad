@@ -51,10 +51,9 @@ export function decodeProfile(data: Uint8Array): number | null {
   return data.length === 2 && data[0] === MSG_PROFILE ? data[1]! : null;
 }
 
-export type Refusal = "busy" | "unauthorized";
+export type Refusal = "unauthorized";
 
-/** Motivo pelo qual o servidor recusou a conexão, ou null se a mensagem for outra. */
+/** Recusa do servidor (token ausente, inválido ou revogado), ou null se a mensagem for outra. */
 export function decodeRefusal(data: Uint8Array): Refusal | null {
-  if (data.length !== 2 || data[0] !== MSG_REFUSAL) return null;
-  return data[1] === 1 ? "busy" : data[1] === 2 ? "unauthorized" : null;
+  return data.length === 2 && data[0] === MSG_REFUSAL && data[1] === 1 ? "unauthorized" : null;
 }

@@ -1,31 +1,13 @@
 /**
- * Acesso ao servidor: o token vem no QR code do terminal (`?t=...`) e é guardado no
- * aparelho; a URL continua com ele (ver `readToken`). Cada aparelho também tem um id próprio, para o servidor
- * reconhecê-lo quando reconecta (ele solta a conexão antiga em vez de achar que é um intruso).
+ * Acesso ao servidor: cada aparelho recebe, ao parear com o código do terminal, um token só
+ * dele, que fica guardado aqui. O app da Tela de Início do iOS tem armazenamento próprio,
+ * separado do Safari, então ele é pareado por conta própria, dentro do app.
  */
 
-type Store = Pick<Storage, "getItem" | "setItem">;
+type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const TOKEN_KEY = "vpad:token";
-const CLIENT_KEY = "vpad:cliente";
-const TOKEN_FORMAT = /^[0-9a-f]{32}$/i;
-const CLIENT_FORMAT = /^[0-9a-f]{32}$/;
-
-function read(storage: Store, key: string): string | null {
-  try {
-    return storage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function write(storage: Store, key: string, value: string) {
-  try {
-    storage.setItem(key, value);
-  } catch {
-    // armazenamento bloqueado: vale só nesta aba
-  }
-}
+export const TOKEN_FORMAT = /^[0-9a-f]{32}$/i;
 
 /** localStorage, ou uma memória simples se o navegador o bloquear (navegação privada). */
 export function safeStorage(): Store {
@@ -35,45 +17,42 @@ export function safeStorage(): Store {
     return storage;
   } catch {
     const memory = new Map<string, string>();
-    return { getItem: (k) => memory.get(k) ?? null, setItem: (k, v) => void memory.set(k, v) };
+    return {
+      getItem: (k) => memory.get(k) ?? null,
+      setItem: (k, v) => void memory.set(k, v),
+      removeItem: (k) => void memory.delete(k),
+    };
   }
 }
 
-/**
- * Token da URL (que então é guardado) ou o guardado antes. A URL mantém o `?t=...` de
- * propósito: é ela que o iOS grava no atalho da Tela de Início, e o app instalado tem
- * armazenamento próprio, separado do Safari, então só a URL leva o token até ele.
- */
-export function readToken(loc: Location, storage: Store): string | null {
-  const part = loc.search
-    .replace(/^\?/, "")
-    .split("&")
-    .find((p) => p === "t" || p.startsWith("t="));
-
-  if (part !== undefined) {
-    const fromUrl = decodeURIComponent(part.slice(2));
-    if (TOKEN_FORMAT.test(fromUrl)) {
-      write(storage, TOKEN_KEY, fromUrl);
-      return fromUrl;
-    }
+/** Token deste aparelho, ou null se ele ainda não foi pareado. */
+export function getToken(storage: Store): string | null {
+  try {
+    const saved = storage.getItem(TOKEN_KEY);
+    return saved !== null && TOKEN_FORMAT.test(saved) ? saved : null;
+  } catch {
+    return null;
   }
-
-  const saved = read(storage, TOKEN_KEY);
-  return saved !== null && TOKEN_FORMAT.test(saved) ? saved : null;
 }
 
-const randomBytes = (n: number) => crypto.getRandomValues(new Uint8Array(n));
-
-/** Id estável deste aparelho (128 bits aleatórios). */
-export function getClientId(storage: Store, random: (n: number) => Uint8Array = randomBytes): string {
-  const saved = read(storage, CLIENT_KEY);
-  if (saved !== null && CLIENT_FORMAT.test(saved)) return saved;
-  const id = [...random(16)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  write(storage, CLIENT_KEY, id);
-  return id;
+export function saveToken(storage: Store, token: string): void {
+  try {
+    storage.setItem(TOKEN_KEY, token);
+  } catch {
+    // armazenamento bloqueado: vale só nesta aba
+  }
 }
 
-export function wsUrl(loc: Location, token: string, clientId: string): string {
+/** Esquece o token (por exemplo, quando o servidor o revogou). */
+export function clearToken(storage: Store): void {
+  try {
+    storage.removeItem(TOKEN_KEY);
+  } catch {
+    // idem
+  }
+}
+
+export function wsUrl(loc: Location, token: string): string {
   const scheme = loc.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${loc.host}/ws?t=${encodeURIComponent(token)}&id=${encodeURIComponent(clientId)}`;
+  return `${scheme}://${loc.host}/ws?t=${encodeURIComponent(token)}`;
 }
