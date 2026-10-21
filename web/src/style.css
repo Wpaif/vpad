@@ -128,11 +128,17 @@ button[data-pressed] {
 }
 .stick[data-pressed] { border-color: var(--accent); }
 
-.toggle {
+.topbar {
   position: fixed;
   top: max(10px, env(safe-area-inset-top));
   left: 50%;
   translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toggle {
   width: 44px;
   height: 32px;
   border-radius: 999px;
@@ -159,9 +165,6 @@ button[data-pressed] {
 }
 
 .status {
-  position: fixed;
-  top: max(14px, env(safe-area-inset-top));
-  right: max(20px, env(safe-area-inset-right));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -187,8 +190,9 @@ button[data-pressed] {
 
 .stats {
   position: fixed;
-  top: calc(max(14px, env(safe-area-inset-top)) + 40px);
-  right: max(20px, env(safe-area-inset-right));
+  top: calc(max(10px, env(safe-area-inset-top)) + 40px);
+  left: 50%;
+  translate: -50% 0;
   width: 220px;
   padding: 12px 14px;
   border-radius: 16px;
