@@ -1,4 +1,6 @@
+import { mount } from "svelte";
 import "./style.css";
+import Pad from "./Pad.svelte";
 import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsProtocols, wsUrl } from "./auth";
 import { connect } from "./connection";
 import { bindController } from "./controller";
@@ -20,6 +22,8 @@ import {
   renderStatus,
 } from "./ui";
 import { bindAppHeight, showViewportDebug } from "./viewport";
+
+mount(Pad, { target: document.getElementById("app")! });
 
 const storage = safeStorage();
 const pad = document.getElementById("pad")!;
