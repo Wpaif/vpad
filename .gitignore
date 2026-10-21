@@ -36,3 +36,8 @@ CLAUDE.local.md
 
 # mise
 .mise.local.toml
+
+# Web (Vite)
+node_modules/
+web/dist/*
+!web/dist/.gitkeep

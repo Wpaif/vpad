@@ -1,0 +1,35 @@
+import { describe, expect, it } from "vitest";
+import { Axis, Button, encodeAxis, encodeButton, encodePing } from "./protocol";
+
+describe("protocol", () => {
+  it("codifica botão pressionado e solto", () => {
+    expect([...encodeButton(Button.A, true)]).toEqual([1, 0, 1]);
+    expect([...encodeButton(Button.Start, false)]).toEqual([1, 7, 0]);
+  });
+
+  it("direcional usa ids 10..13", () => {
+    expect([...encodeButton(Button.Left, true)]).toEqual([1, 12, 1]);
+  });
+
+  it("codifica eixo em i16 little-endian", () => {
+    expect([...encodeAxis(Axis.LX, 0x1234)]).toEqual([2, 0, 0x34, 0x12]);
+    expect([...encodeAxis(Axis.RY, -1)]).toEqual([2, 3, 0xff, 0xff]);
+  });
+
+  it("limita o eixo ao intervalo i16", () => {
+    expect([...encodeAxis(Axis.LX, 99999)]).toEqual([2, 0, 0xff, 0x7f]);
+    expect([...encodeAxis(Axis.LX, -99999)]).toEqual([2, 0, 0x00, 0x80]);
+  });
+
+  it("gatilhos ficam entre 0 e 255", () => {
+    expect([...encodeAxis(Axis.LT, 300)]).toEqual([2, 4, 255, 0]);
+    expect([...encodeAxis(Axis.RT, -5)]).toEqual([2, 5, 0, 0]);
+  });
+
+  it("ping carrega timestamp de 8 bytes", () => {
+    const msg = encodePing(1234.5);
+    expect(msg.length).toBe(9);
+    expect(msg[0]).toBe(3);
+    expect(new DataView(msg.buffer).getFloat64(1, true)).toBe(1234.5);
+  });
+});
