@@ -21,6 +21,7 @@ use rustls::{
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 use serde::{Deserialize, Serialize};
+use sha2::Digest;
 use time::OffsetDateTime;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
@@ -277,6 +278,18 @@ fn uniao_com_o_antigo(pasta: &Path, necessarios: &[String]) -> Vec<String> {
     todos.sort();
     todos.dedup();
     todos
+}
+
+impl Material {
+    /// SHA-256 do certificado da autoridade: o que o celular mostra nos detalhes do perfil.
+    pub fn impressao_digital(&self) -> String {
+        impressao_digital(&self.ca_der)
+    }
+}
+
+/// SHA-256 em maiúsculas separado por dois-pontos, como o `openssl` e o iOS mostram.
+pub fn impressao_digital(der: &[u8]) -> String {
+    sha2::Sha256::digest(der).iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(":")
 }
 
 /// Configuração TLS do servidor, oferecendo HTTP/2 e HTTP/1.1.
@@ -566,6 +579,36 @@ mod testes {
     fn sem_nenhum_ip_ainda_vale_para_localhost() {
         let pasta = Pasta::nova("sem-ip");
         assert!(carregar_ou_criar(&pasta.0, &[], agora()).is_ok());
+    }
+
+    // ---------- impressão digital ----------
+
+    #[test]
+    fn impressao_digital_confere_com_vetores_conhecidos_do_sha256() {
+        assert_eq!(
+            impressao_digital(b""),
+            "E3:B0:C4:42:98:FC:1C:14:9A:FB:F4:C8:99:6F:B9:24:27:AE:41:E4:64:9B:93:4C:A4:95:99:1B:78:52:B8:55"
+        );
+        assert_eq!(
+            impressao_digital(b"abc"),
+            "BA:78:16:BF:8F:01:CF:EA:41:41:40:DE:5D:AE:22:23:B0:03:61:A3:96:17:7A:9C:B4:10:FF:61:F2:00:15:AD"
+        );
+    }
+
+    #[test]
+    fn a_impressao_digital_da_autoridade_e_a_do_certificado_que_o_celular_instala() {
+        let pasta = Pasta::nova("fp");
+        let m = carregar_ou_criar(&pasta.0, &[ip(192, 168, 68, 103)], agora()).unwrap();
+        assert_eq!(m.impressao_digital(), impressao_digital(&m.ca_der));
+        assert_eq!(m.impressao_digital().split(':').count(), 32);
+    }
+
+    #[test]
+    fn autoridades_diferentes_tem_impressoes_diferentes() {
+        let (a, b) = (Pasta::nova("fp-a"), Pasta::nova("fp-b"));
+        let ma = carregar_ou_criar(&a.0, &[ip(192, 168, 68, 103)], agora()).unwrap();
+        let mb = carregar_ou_criar(&b.0, &[ip(192, 168, 68, 103)], agora()).unwrap();
+        assert_ne!(ma.impressao_digital(), mb.impressao_digital());
     }
 
     // ---------- restrição de nomes da autoridade ----------

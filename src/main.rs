@@ -164,6 +164,9 @@ async fn main() -> io::Result<()> {
     } else if material.folha_renovada {
         println!("certificado do servidor renovado (IP novo ou perto de vencer); os celulares não precisam fazer nada");
     }
+    let impressao = material.impressao_digital();
+    let (primeira, segunda) = impressao.split_at(impressao.char_indices().filter(|(_, c)| *c == ':').nth(15).map_or(0, |(i, _)| i + 1));
+    println!("impressão digital (SHA-256) da autoridade, para conferir no celular antes de instalar o perfil:\n  {primeira}\n  {segunda}");
     for ip in &material.ips_ignorados {
         eprintln!("aviso: o IP {ip} não é de rede local e ficou fora do certificado");
     }

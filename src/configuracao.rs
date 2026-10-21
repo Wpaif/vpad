@@ -63,7 +63,7 @@ async fn pagina(State(cfg): State<Arc<Configuracao>>, headers: HeaderMap) -> Htm
   <p>O vpad protege o acesso com HTTPS. Faça isto uma vez em cada celular.</p>
   <ol>
     <li><a class="botao" href="/vpad.mobileconfig">Baixar o perfil</a><br>Toque em <b>Permitir</b>.</li>
-    <li>Abra <b>Ajustes</b> → <b>Perfil baixado</b> → <b>Instalar</b>.</li>
+    <li>Abra <b>Ajustes</b> → <b>Perfil baixado</b>, toque no certificado e em <b>Mais detalhes</b>, e confira se a <b>impressão digital SHA-256</b> é igual à mostrada no <b>terminal do PC</b>. Só então toque em <b>Instalar</b>. <b>Não confie</b> em nenhuma impressão digital exibida por esta página: quem estiver interceptando a rede poderia trocá-la.</li>
     <li>Abra <b>Ajustes</b> → <b>Geral</b> → <b>Sobre</b> → <b>Ajustes de Confiança de Certificado</b> e ative a confiança em <b>vpad</b>.</li>
     <li>{abrir}</li>
   </ol>
@@ -146,6 +146,17 @@ mod testes {
         assert!(html.contains("/vpad.mobileconfig"), "{html}");
         assert!(html.contains("Ajustes de Confiança"), "o passo manual que o iOS exige");
         assert!(html.contains("https://192.168.68.103:8443/"), "{html}");
+    }
+
+    #[tokio::test]
+    async fn a_pagina_manda_conferir_a_impressao_digital_no_terminal_e_nao_nela_mesma() {
+        let (_, _, html) = pegar("GET", "/", Some("192.168.68.103:8080")).await;
+        let texto = html.to_lowercase();
+        assert!(texto.contains("impressão digital"), "{html}");
+        assert!(texto.contains("terminal do pc"), "{html}");
+        // uma página servida por HTTP pode ser trocada por quem intercepta: o valor certo só existe no terminal
+        assert!(texto.contains("não confie") || texto.contains("nunca confie"), "{html}");
+        assert!(!html.contains("E3:B0:C4"), "a página não exibe a impressão digital");
     }
 
     #[tokio::test]
