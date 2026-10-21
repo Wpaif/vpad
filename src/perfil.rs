@@ -31,6 +31,12 @@ pub enum Gatilhos {
     Ambos,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Tipo {
+    Gamepad,
+    Teclado,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct Perfil {
     pub id: &'static str,
@@ -38,12 +44,15 @@ pub struct Perfil {
     pub fabricante: u16,
     pub produto: u16,
     pub versao: u16,
+    pub tipo: Tipo,
+    /// Só os gamepads usam `analogico` e `gatilhos`.
     pub analogico: Faixa,
     pub gatilhos: Gatilhos,
 }
 
 pub const XBOX_360: Perfil = Perfil {
     id: "xbox360",
+    tipo: Tipo::Gamepad,
     nome: "vpad Xbox 360 Controller",
     fabricante: 0x045e,
     produto: 0x028e,
@@ -54,6 +63,7 @@ pub const XBOX_360: Perfil = Perfil {
 
 pub const DUALSHOCK_4: Perfil = Perfil {
     id: "ds4",
+    tipo: Tipo::Gamepad,
     nome: "vpad DualShock 4",
     fabricante: 0x054c,
     produto: 0x09cc,
@@ -64,6 +74,7 @@ pub const DUALSHOCK_4: Perfil = Perfil {
 
 pub const SWITCH_PRO: Perfil = Perfil {
     id: "switch-pro",
+    tipo: Tipo::Gamepad,
     nome: "vpad Switch Pro Controller",
     fabricante: 0x057e,
     produto: 0x2009,
@@ -72,7 +83,19 @@ pub const SWITCH_PRO: Perfil = Perfil {
     gatilhos: Gatilhos::Digitais,
 };
 
-pub const PERFIS: [&Perfil; 3] = [&XBOX_360, &DUALSHOCK_4, &SWITCH_PRO];
+/// Teclado virtual: os controles da página viram teclas (ver `mapa`).
+pub const TECLADO: Perfil = Perfil {
+    id: "teclado",
+    tipo: Tipo::Teclado,
+    nome: "vpad Keyboard",
+    fabricante: 0x1209,
+    produto: 0x0001,
+    versao: 0x0100,
+    analogico: Faixa { min: -32768, max: 32767 },
+    gatilhos: Gatilhos::Analogicos,
+};
+
+pub const PERFIS: [&Perfil; 4] = [&XBOX_360, &DUALSHOCK_4, &SWITCH_PRO, &TECLADO];
 
 impl Perfil {
     pub fn por_id(id: &str) -> Option<&'static Perfil> {
@@ -115,6 +138,15 @@ mod testes {
         assert_eq!(id(&XBOX_360), (0x045e, 0x028e));
         assert_eq!(id(&DUALSHOCK_4), (0x054c, 0x09cc));
         assert_eq!(id(&SWITCH_PRO), (0x057e, 0x2009));
+        assert_eq!(id(&TECLADO), (0x1209, 0x0001));
+    }
+
+    #[test]
+    fn tipo_do_perfil() {
+        assert_eq!(XBOX_360.tipo, Tipo::Gamepad);
+        assert_eq!(DUALSHOCK_4.tipo, Tipo::Gamepad);
+        assert_eq!(SWITCH_PRO.tipo, Tipo::Gamepad);
+        assert_eq!(TECLADO.tipo, Tipo::Teclado);
     }
 
     #[test]
@@ -122,7 +154,7 @@ mod testes {
         for p in PERFIS {
             assert_eq!(Perfil::por_id(p.id).map(|x| x.id), Some(p.id));
         }
-        assert_eq!(PERFIS.len(), 3);
+        assert_eq!(PERFIS.len(), 4);
         assert!(Perfil::por_id("nao-existe").is_none());
     }
 
@@ -188,7 +220,7 @@ mod testes {
     fn ordem_dos_perfis_e_a_mesma_da_pagina() {
         // web/src/profiles.ts usa estes mesmos índices: mudar a ordem exige mudar os dois lados.
         let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
-        assert_eq!(ids, ["xbox360", "ds4", "switch-pro"]);
+        assert_eq!(ids, ["xbox360", "ds4", "switch-pro", "teclado"]);
     }
 
     #[test]
@@ -196,6 +228,7 @@ mod testes {
         assert_eq!(indice_do_perfil("xbox360"), Some(0));
         assert_eq!(indice_do_perfil("ds4"), Some(1));
         assert_eq!(indice_do_perfil("switch-pro"), Some(2));
+        assert_eq!(indice_do_perfil("teclado"), Some(3));
         assert_eq!(indice_do_perfil("wii"), None);
     }
 }

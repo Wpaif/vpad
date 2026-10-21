@@ -4,6 +4,7 @@ pub mod mapeamento;
 pub mod perfil;
 pub mod protocolo;
 pub mod servico;
+pub mod teclado;
 pub mod teclas;
 
 use axum::{

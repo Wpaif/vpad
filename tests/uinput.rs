@@ -198,3 +198,105 @@ fn switch_pro_nao_tem_eixo_de_gatilho_so_botao() {
     let lidos: Vec<_> = ler(&mut dev, 1).iter().map(|e| (e.code(), e.value())).collect();
     assert_eq!(lidos, vec![(KeyCode::BTN_TR2.0, 1)]);
 }
+
+mod teclado {
+    //! Estes testes criam um teclado de verdade no sistema. Os que emitem eventos usam só
+    //! modificadoras isoladas (Shift/Ctrl/Alt, que não digitam nada) e ficam atrás de
+    //! `#[ignore]`, pois mexem na entrada da sessão em uso: `cargo test -- --ignored`.
+
+    use super::*;
+    use std::collections::BTreeMap;
+    use vpad::{dispositivo::Teclado, mapa::Mapa, perfil::TECLADO};
+
+    fn mapa_inofensivo(pares: &[(&str, &str)]) -> Mapa {
+        let json: BTreeMap<_, _> = pares.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect();
+        Mapa::de_json(&json).unwrap()
+    }
+
+    fn teclado(mapa: Mapa) -> Option<Teclado> {
+        match Teclado::novo(&TECLADO, mapa) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                eprintln!("uinput indisponível ({e}); teste ignorado");
+                None
+            }
+        }
+    }
+
+    fn abrir_teclado(t: &mut Teclado) -> Device {
+        let fim = Instant::now() + Duration::from_secs(3);
+        loop {
+            let aberto = t.caminhos().unwrap().into_iter().find_map(|p| Device::open(p).ok());
+            if let Some(d) = aberto {
+                d.set_nonblocking(true).unwrap();
+                return d;
+            }
+            assert!(Instant::now() < fim, "dispositivo não apareceu em /dev/input");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
+    #[test]
+    fn aparece_como_teclado_com_todas_as_teclas_do_catalogo() {
+        let Some(mut t) = teclado(Mapa::padrao()) else { return };
+        let dev = abrir_teclado(&mut t);
+
+        assert_eq!(dev.name(), Some("vpad Keyboard"));
+        let id = dev.input_id();
+        assert_eq!((id.vendor(), id.product()), (0x1209, 0x0001));
+
+        let teclas = dev.supported_keys().unwrap();
+        for k in [KeyCode::KEY_A, KeyCode::KEY_SPACE, KeyCode::KEY_LEFTSHIFT, KeyCode::KEY_F12, KeyCode::KEY_UP] {
+            assert!(teclas.contains(k), "{k:?}");
+        }
+        assert!(dev.supported_absolute_axes().is_none(), "teclado não tem eixos");
+    }
+
+    #[test]
+    #[ignore = "injeta modificadoras na sessão em uso; rode com --ignored"]
+    fn botao_do_celular_vira_tecla_no_sistema() {
+        let mapa = mapa_inofensivo(&[("A", "ShiftRight"), ("LS_Right", "ControlRight")]);
+        let Some(mut t) = teclado(mapa) else { return };
+        let mut dev = abrir_teclado(&mut t);
+
+        t.aplicar(Evento::Botao { id: 0, pressionado: true }).unwrap();
+        t.aplicar(Evento::Eixo { id: 0, valor: 30000 }).unwrap();
+        t.aplicar(Evento::Botao { id: 0, pressionado: false }).unwrap();
+        t.aplicar(Evento::SoltarTudo).unwrap();
+
+        let lidos: Vec<_> = ler(&mut dev, 4).iter().map(|e| (e.code(), e.value())).collect();
+        assert_eq!(
+            lidos,
+            vec![
+                (KeyCode::KEY_RIGHTSHIFT.0, 1),
+                (KeyCode::KEY_RIGHTCTRL.0, 1),
+                (KeyCode::KEY_RIGHTSHIFT.0, 0),
+                (KeyCode::KEY_RIGHTCTRL.0, 0),
+            ]
+        );
+    }
+
+    #[test]
+    #[ignore = "injeta modificadoras na sessão em uso; rode com --ignored"]
+    fn mapa_novo_solta_o_que_estava_pressionado_e_vale_no_proximo_toque() {
+        let Some(mut t) = teclado(mapa_inofensivo(&[("A", "ShiftRight")])) else { return };
+        let mut dev = abrir_teclado(&mut t);
+
+        t.aplicar(Evento::Botao { id: 0, pressionado: true }).unwrap();
+        ler(&mut dev, 1);
+
+        t.definir_mapa(&mapa_inofensivo(&[("A", "ControlRight")])).unwrap();
+        t.aplicar(Evento::Botao { id: 0, pressionado: true }).unwrap();
+        t.aplicar(Evento::SoltarTudo).unwrap();
+
+        let lidos: Vec<_> = ler(&mut dev, 3).iter().map(|e| (e.code(), e.value())).collect();
+        assert_eq!(
+            lidos,
+            vec![
+                (KeyCode::KEY_RIGHTSHIFT.0, 0),
+                (KeyCode::KEY_RIGHTCTRL.0, 1),
+                (KeyCode::KEY_RIGHTCTRL.0, 0),
+            ]
+        );
+    }
+}

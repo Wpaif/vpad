@@ -120,11 +120,12 @@ mod testes {
     fn decodifica_troca_de_perfil() {
         assert_eq!(decodificar(&[4, 0]), Some(Evento::TrocarPerfil(0)));
         assert_eq!(decodificar(&[4, 2]), Some(Evento::TrocarPerfil(2)));
+        assert_eq!(decodificar(&[4, 3]), Some(Evento::TrocarPerfil(3))); // teclado
     }
 
     #[test]
     fn rejeita_perfil_fora_da_lista() {
-        assert_eq!(decodificar(&[4, 3]), None);
+        assert_eq!(decodificar(&[4, 4]), None);
         assert_eq!(decodificar(&[4]), None);
         assert_eq!(decodificar(&[4, 0, 0]), None);
     }

@@ -5,11 +5,18 @@ use std::io;
 
 use tokio::sync::{mpsc::UnboundedReceiver, watch};
 
-use crate::{perfil::{PERFIS, Perfil}, protocolo::Evento};
+use crate::{
+    mapa::Mapa,
+    perfil::{PERFIS, Perfil},
+    protocolo::Evento,
+};
 
 /// Destino dos eventos: o gamepad virtual de verdade (uinput) ou um falso nos testes.
 pub trait Dispositivo: Send {
     fn aplicar(&mut self, evento: Evento) -> io::Result<()>;
+
+    /// O mapa de teclas mudou. Só o teclado usa; os gamepads ignoram.
+    fn definir_mapa(&mut self, _mapa: &Mapa) {}
 }
 
 /// Cria o dispositivo de um perfil.
