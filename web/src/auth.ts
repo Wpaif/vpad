@@ -74,7 +74,16 @@ export function saveDeviceId(storage: Store, id: string): void {
   }
 }
 
-export function wsUrl(loc: Location, token: string): string {
+/** A URL do WebSocket, sem segredo: o token vai no subprotocolo (ver `wsProtocols`). */
+export function wsUrl(loc: Location): string {
   const scheme = loc.protocol === "https:" ? "wss" : "ws";
-  return `${scheme}://${loc.host}/ws?t=${encodeURIComponent(token)}`;
+  return `${scheme}://${loc.host}/ws`;
+}
+
+/**
+ * O token viaja como subprotocolo, fora da URL: assim ele não fica no histórico do navegador,
+ * no Referer nem nos logs do servidor. O primeiro valor é o protocolo que o servidor escolhe.
+ */
+export function wsProtocols(token: string): string[] {
+  return ["vpad", `vpad.${token}`];
 }

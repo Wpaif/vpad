@@ -12,7 +12,7 @@ class FakeSocket {
   onclose: (() => void) | null = null;
   onmessage: ((e: { data: ArrayBuffer }) => void) | null = null;
   onerror: (() => void) | null = null;
-  constructor(public url: string) {
+  constructor(public url: string, public protocols?: string[]) {
     FakeSocket.instances.push(this);
   }
   send(d: Uint8Array) {
@@ -60,6 +60,18 @@ describe("connect", () => {
     expect(statuses).toEqual(["connecting"]);
     last().open();
     expect(statuses).toEqual(["connecting", "open"]);
+  });
+
+  it("anuncia os subprotocolos, para o token não ir na URL", () => {
+    connect({
+      url: "ws://pc/ws",
+      protocols: ["vpad", "vpad.0123456789abcdef0123456789abcdef"],
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: () => {},
+      onLatency: () => {},
+    });
+    expect(last().url).toBe("ws://pc/ws");
+    expect(last().protocols).toEqual(["vpad", "vpad.0123456789abcdef0123456789abcdef"]);
   });
 
   it("send só envia com o socket aberto e descarta o resto", () => {

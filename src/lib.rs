@@ -26,7 +26,7 @@ use axum::{
     Router,
     body::Body,
     extract::{
-        ConnectInfo, DefaultBodyLimit, Query, State,
+        ConnectInfo, DefaultBodyLimit, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderValue, Request, StatusCode, Uri, header},
@@ -35,7 +35,6 @@ use axum::{
     routing::{get, post},
 };
 use rust_embed::RustEmbed;
-use serde::Deserialize;
 use std::{net::{IpAddr, SocketAddr}, sync::Arc, time::Duration};
 use tokio::{
     sync::{
@@ -181,22 +180,44 @@ struct Estado {
     acesso: Arc<Acesso>,
 }
 
-/// Parâmetros da URL do WebSocket: `/ws?t=<token do aparelho>`.
-#[derive(Deserialize)]
-struct ParametrosWs {
-    t: Option<String>,
+/// O token do aparelho viaja no subprotocolo `vpad.<token>`, nunca na URL — que acaba no
+/// histórico do navegador, no Referer e nos logs. O `vpad` puro é o nome que o servidor
+/// escolhe na negociação; o token fica no outro valor oferecido pelo cliente.
+fn token_do_subprotocolo(partes: &axum::http::request::Parts) -> Option<String> {
+    partes
+        .headers
+        .get_all(header::SEC_WEBSOCKET_PROTOCOL)
+        .iter()
+        .filter_map(|valor| valor.to_str().ok())
+        .flat_map(|valor| valor.split(','))
+        .find_map(|protocolo| protocolo.trim().strip_prefix("vpad."))
+        .filter(|token| token.len() == 32 && token.chars().all(|c| c.is_ascii_hexdigit()))
+        .map(str::to_string)
+}
+
+fn ofereceu_vpad(partes: &axum::http::request::Parts) -> bool {
+    partes
+        .headers
+        .get_all(header::SEC_WEBSOCKET_PROTOCOL)
+        .iter()
+        .filter_map(|valor| valor.to_str().ok())
+        .flat_map(|valor| valor.split(','))
+        .any(|protocolo| protocolo.trim() == "vpad")
 }
 
 async fn rota_ws(
     ws: WebSocketUpgrade,
-    Query(parametros): Query<ParametrosWs>,
     State(estado): State<Estado>,
     partes: axum::http::request::Parts,
 ) -> Response {
     let origem = partes.extensions.get::<ConnectInfo<SocketAddr>>().map(|c| c.0.ip());
+    let token = token_do_subprotocolo(&partes).unwrap_or_default();
+    // só escolhe `vpad` se o cliente o ofereceu; senão o handshake seria recusado pelo
+    // navegador (que exige um subprotocolo dentre os pedidos) antes de podermos recusar
+    let ws = if ofereceu_vpad(&partes) { ws.protocols(["vpad"]) } else { ws };
     ws.max_message_size(TAMANHO_MAXIMO_DA_MENSAGEM)
         .max_frame_size(TAMANHO_MAXIMO_DA_MENSAGEM)
-        .on_upgrade(move |socket| conexao(socket, estado, parametros, origem))
+        .on_upgrade(move |socket| conexao(socket, estado, token, origem))
 }
 
 async fn avisar_perfil(ws: &mut WebSocket, indice: u8) -> Result<(), axum::Error> {
@@ -270,8 +291,7 @@ async fn pedir_teclado(
     Ok(())
 }
 
-async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, origem: Option<IpAddr>) {
-    let token = parametros.t.unwrap_or_default();
+async fn conexao(mut ws: WebSocket, estado: Estado, token: String, origem: Option<IpAddr>) {
     if !estado.acesso.autorizado(&token, crate::dispositivos::agora()) {
         return recusar(&mut ws).await;
     }

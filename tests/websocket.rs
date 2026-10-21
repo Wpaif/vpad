@@ -74,13 +74,27 @@ async fn pedido_pendente(s: &Servidor) -> Pedido {
     panic!("nenhum pedido de aprovação chegou ao terminal");
 }
 
-fn url_com(s: &Servidor, token: &str) -> String {
+/// URL antiga, com o token na query: só serve para provar que ela não autentica mais.
+fn url_com_token(s: &Servidor, token: &str) -> String {
     format!("{}?t={token}", s.url)
+}
+
+/// Abre o WebSocket anunciando os subprotocolos dados (o token vai em `vpad.<token>`).
+async fn conectar_com_protocolos(s: &Servidor, protocolos: &[&str]) -> Cliente {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let mut pedido = s.url.clone().into_client_request().unwrap();
+    if !protocolos.is_empty() {
+        pedido.headers_mut().insert(
+            "sec-websocket-protocol",
+            protocolos.join(", ").parse().unwrap(),
+        );
+    }
+    connect_async(pedido).await.unwrap().0
 }
 
 /// Conecta com `token` e consome o aviso de perfil.
 async fn conectar(s: &Servidor, token: &str) -> Cliente {
-    let mut ws = connect_async(url_com(s, token)).await.unwrap().0;
+    let mut ws = conectar_com_protocolos(s, &["vpad", &format!("vpad.{token}")]).await;
     assert_eq!(proxima(&mut ws).await, vec![4, 0], "aviso inicial de perfil");
     ws
 }
@@ -136,7 +150,7 @@ async fn ao_conectar_o_servidor_informa_o_perfil_atual() {
     let s = servidor().await;
     let (_, token) = parear(&s, "iPhone");
     s.perfil.send(2).unwrap();
-    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    let mut ws = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{token}")]).await;
     assert_eq!(proxima(&mut ws).await, vec![4, 2]);
 }
 
@@ -203,29 +217,38 @@ async fn queda_abrupta_tambem_solta_tudo() {
 // ---------- token por dispositivo ----------
 
 #[tokio::test]
-async fn sem_token_ou_com_token_invalido_e_recusado_e_nada_chega_ao_controle() {
+async fn sem_subprotocolo_ou_com_token_invalido_e_recusado_e_nada_chega_ao_controle() {
     let mut s = servidor().await;
     let (_, valido) = parear(&s, "iPhone");
-    for url in [
-        s.url.clone(),
-        format!("{}?t=", s.url),
-        format!("{}?t=errado", s.url),
-        format!("{}?t={valido}x", s.url),
-        format!("{}?t={}", s.url, &valido[..31]),
-        format!("{}?id=celular-1", s.url),
-    ] {
-        let mut ws = connect_async(&url).await.unwrap().0;
-        assert_eq!(proxima(&mut ws).await, vec![5, 1], "{url}");
+    let casos: Vec<Vec<String>> = vec![
+        vec![],
+        vec!["vpad".into()],
+        vec!["vpad".into(), "vpad.errado".into()],
+        vec!["vpad".into(), format!("vpad.{valido}x")],
+        vec!["vpad".into(), format!("vpad.{}", &valido[..31])],
+    ];
+    for protocolos in casos {
+        let anunciados: Vec<&str> = protocolos.iter().map(String::as_str).collect();
+        let mut ws = conectar_com_protocolos(&s, &anunciados).await;
+        assert_eq!(proxima(&mut ws).await, vec![5, 1], "{protocolos:?}");
         let _ = ws.send(botao(0, true)).await;
-        assert!(foi_encerrada(&mut ws).await, "{url}");
+        assert!(foi_encerrada(&mut ws).await, "{protocolos:?}");
     }
+
+    // o token na URL, como era antes, já não autentica
+    let mut ws = connect_async(url_com_token(&s, &valido)).await.unwrap().0;
+    assert_eq!(proxima(&mut ws).await, vec![5, 1], "token na URL");
+    let _ = ws.send(botao(0, true)).await;
+    assert!(foi_encerrada(&mut ws).await, "token na URL");
+
     silencio(&mut s.eventos).await;
 }
 
 #[tokio::test]
 async fn ninguem_pareado_significa_ninguem_conecta() {
     let s = servidor().await;
-    let mut ws = connect_async(url_com(&s, "0123456789abcdef0123456789abcdef")).await.unwrap().0;
+    let mut ws =
+        conectar_com_protocolos(&s, &["vpad", "vpad.0123456789abcdef0123456789abcdef"]).await;
     assert_eq!(proxima(&mut ws).await, vec![5, 1]);
 }
 
@@ -274,7 +297,7 @@ async fn aparelho_revogado_nao_conecta_mais() {
     let s = servidor().await;
     let (id, token) = parear(&s, "iPhone");
     s.acesso.dispositivos().revogar(&id).unwrap();
-    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    let mut ws = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{token}")]).await;
     assert_eq!(proxima(&mut ws).await, vec![5, 1]);
 }
 
@@ -449,7 +472,7 @@ async fn se_o_teclado_ja_esta_ativo_o_pedido_passa_direto() {
     let mut s = servidor().await;
     let (_, token) = parear_teclado(&s, "iPhone");
     s.perfil.send(TECLADO).unwrap();
-    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    let mut ws = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{token}")]).await;
     assert_eq!(proxima(&mut ws).await, vec![4, TECLADO]);
 
     ws.send(pedir_perfil(TECLADO)).await.unwrap();
@@ -472,8 +495,8 @@ async fn com_o_teclado_ativo_so_aparelhos_com_permissao_conseguem_digitar() {
     let (_, com) = parear_teclado(&s, "iPhone");
     let (_, sem) = parear(&s, "iPad");
     s.perfil.send(TECLADO).unwrap();
-    let mut a = connect_async(url_com(&s, &com)).await.unwrap().0;
-    let mut b = connect_async(url_com(&s, &sem)).await.unwrap().0;
+    let mut a = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{com}")]).await;
+    let mut b = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{sem}")]).await;
     proxima(&mut a).await;
     proxima(&mut b).await;
 
@@ -492,7 +515,7 @@ async fn aparelho_sem_permissao_pode_sair_do_teclado_mas_os_botoes_dele_nao_pass
     let mut s = servidor().await;
     let (_, sem) = parear(&s, "iPad");
     s.perfil.send(TECLADO).unwrap();
-    let mut b = connect_async(url_com(&s, &sem)).await.unwrap().0;
+    let mut b = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{sem}")]).await;
     proxima(&mut b).await;
 
     b.send(pedir_perfil(0)).await.unwrap();
@@ -504,7 +527,7 @@ async fn tirar_a_permissao_com_o_aparelho_conectado_para_as_teclas_na_hora() {
     let mut s = servidor().await;
     let (id, token) = parear_teclado(&s, "iPhone");
     s.perfil.send(TECLADO).unwrap();
-    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    let mut ws = conectar_com_protocolos(&s, &["vpad", &format!("vpad.{token}")]).await;
     proxima(&mut ws).await;
 
     ws.send(botao(0, true)).await.unwrap();
