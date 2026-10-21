@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { getClientId, readToken, safeStorage, wsUrl } from "./auth";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
@@ -18,47 +18,40 @@ function lugar(search: string, hash = "") {
 }
 
 let storage: ReturnType<typeof memoria>;
-let replaceState: ReturnType<typeof vi.fn>;
-let history: History;
 
 beforeEach(() => {
   storage = memoria();
-  replaceState = vi.fn();
-  history = { replaceState } as unknown as History;
 });
 
 describe("readToken", () => {
-  it("pega o token da URL do QR code, guarda e tira da barra de endereço", () => {
-    expect(readToken(lugar(`?t=${TOKEN}`), storage, history)).toBe(TOKEN);
+  it("pega o token da URL do QR code e guarda", () => {
+    expect(readToken(lugar(`?t=${TOKEN}`), storage)).toBe(TOKEN);
     expect(storage.getItem("vpad:token")).toBe(TOKEN);
-    expect(replaceState).toHaveBeenCalledWith(null, "", "/");
   });
 
-  it("ao limpar a URL preserva os outros parâmetros e o hash", () => {
-    readToken(lugar(`?debug&t=${TOKEN}&x=1`, "#a"), storage, history);
-    expect(replaceState).toHaveBeenCalledWith(null, "", "/?debug&x=1#a");
+  it("acha o token entre outros parâmetros", () => {
+    expect(readToken(lugar(`?debug&t=${TOKEN}&x=1`, "#a"), storage)).toBe(TOKEN);
   });
 
   it("sem token na URL usa o guardado (atalho da tela inicial)", () => {
     storage.setItem("vpad:token", TOKEN);
-    expect(readToken(lugar(""), storage, history)).toBe(TOKEN);
-    expect(replaceState).not.toHaveBeenCalled();
+    expect(readToken(lugar(""), storage)).toBe(TOKEN);
   });
 
   it("o token da URL vale mais que o guardado e o substitui (token renovado)", () => {
     storage.setItem("vpad:token", OUTRO);
-    expect(readToken(lugar(`?t=${TOKEN}`), storage, history)).toBe(TOKEN);
+    expect(readToken(lugar(`?t=${TOKEN}`), storage)).toBe(TOKEN);
     expect(storage.getItem("vpad:token")).toBe(TOKEN);
   });
 
   it("token de formato estranho na URL é ignorado", () => {
     storage.setItem("vpad:token", OUTRO);
-    expect(readToken(lugar("?t=<script>"), storage, history)).toBe(OUTRO);
-    expect(readToken(lugar("?t=curto"), storage, history)).toBe(OUTRO);
+    expect(readToken(lugar("?t=<script>"), storage)).toBe(OUTRO);
+    expect(readToken(lugar("?t=curto"), storage)).toBe(OUTRO);
   });
 
   it("sem nenhum token devolve null", () => {
-    expect(readToken(lugar(""), storage, history)).toBeNull();
+    expect(readToken(lugar(""), storage)).toBeNull();
   });
 
   it("armazenamento bloqueado não impede de usar o token da URL", () => {
@@ -70,8 +63,8 @@ describe("readToken", () => {
         throw new Error("bloqueado");
       },
     };
-    expect(readToken(lugar(`?t=${TOKEN}`), quebrado, history)).toBe(TOKEN);
-    expect(readToken(lugar(""), quebrado, history)).toBeNull();
+    expect(readToken(lugar(`?t=${TOKEN}`), quebrado)).toBe(TOKEN);
+    expect(readToken(lugar(""), quebrado)).toBeNull();
   });
 });
 

@@ -2,7 +2,6 @@
   "name": "vpad",
   "short_name": "vpad",
   "description": "Controle virtual para o PC pela rede local",
-  "start_url": "/",
   "display": "fullscreen",
   "orientation": "landscape",
   "background_color": "#0b0d12",

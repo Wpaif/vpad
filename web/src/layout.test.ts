@@ -51,3 +51,9 @@ describe("tela de acesso recusado no HTML", () => {
     expect(document.getElementById("gate-retry")).not.toBeNull();
   });
 });
+
+describe("dica de instalação", () => {
+  it("manda abrir pelo link do QR code, para o atalho levar o código de acesso", () => {
+    expect(document.getElementById("install-hint")!.textContent).toMatch(/QR/);
+  });
+});

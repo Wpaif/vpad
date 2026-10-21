@@ -151,6 +151,18 @@ describe("tela de acesso recusado", () => {
     expect(message()).toMatch(/QR/);
   });
 
+  it("app da Tela de Início sem token: explica que o ícone foi criado sem o código", () => {
+    renderGate(gate(), "unauthorized", true);
+    expect(message()).toMatch(/instalado sem o código/i);
+    expect(message()).toMatch(/Safari/);
+    expect(message()).toMatch(/QR/);
+  });
+
+  it("no Safari comum a mensagem de não autorizado continua a de escanear o QR code", () => {
+    renderGate(gate(), "unauthorized", false);
+    expect(message()).not.toMatch(/instalado/i);
+  });
+
   it("null esconde a tela", () => {
     renderGate(gate(), "busy");
     renderGate(gate(), null);

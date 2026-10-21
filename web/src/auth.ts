@@ -1,6 +1,6 @@
 /**
- * Acesso ao servidor: o token vem no QR code do terminal (`?t=...`), é guardado no aparelho
- * e tirado da barra de endereço. Cada aparelho também tem um id próprio, para o servidor
+ * Acesso ao servidor: o token vem no QR code do terminal (`?t=...`) e é guardado no
+ * aparelho; a URL continua com ele (ver `readToken`). Cada aparelho também tem um id próprio, para o servidor
  * reconhecê-lo quando reconecta (ele solta a conexão antiga em vez de achar que é um intruso).
  */
 
@@ -39,15 +39,19 @@ export function safeStorage(): Store {
   }
 }
 
-/** Token da URL (que então é guardado e removido da barra) ou o guardado antes. */
-export function readToken(loc: Location, storage: Store, history: History): string | null {
-  const parts = loc.search.replace(/^\?/, "").split("&").filter(Boolean);
-  const tokenPart = parts.find((p) => p === "t" || p.startsWith("t="));
+/**
+ * Token da URL (que então é guardado) ou o guardado antes. A URL mantém o `?t=...` de
+ * propósito: é ela que o iOS grava no atalho da Tela de Início, e o app instalado tem
+ * armazenamento próprio, separado do Safari, então só a URL leva o token até ele.
+ */
+export function readToken(loc: Location, storage: Store): string | null {
+  const part = loc.search
+    .replace(/^\?/, "")
+    .split("&")
+    .find((p) => p === "t" || p.startsWith("t="));
 
-  if (tokenPart !== undefined) {
-    const rest = parts.filter((p) => p !== tokenPart).join("&");
-    history.replaceState(null, "", loc.pathname + (rest ? `?${rest}` : "") + loc.hash);
-    const fromUrl = decodeURIComponent(tokenPart.slice(2));
+  if (part !== undefined) {
+    const fromUrl = decodeURIComponent(part.slice(2));
     if (TOKEN_FORMAT.test(fromUrl)) {
       write(storage, TOKEN_KEY, fromUrl);
       return fromUrl;

@@ -40,10 +40,10 @@ bindInstallHint(
   storage,
 );
 
-const token = readToken(location, storage, history);
+const token = readToken(location, storage);
 if (token === null) {
   // Sem token não há o que tentar: o servidor recusaria. O QR code do terminal o traz.
-  renderGate(gate, "unauthorized");
+  renderGate(gate, "unauthorized", standalone);
 } else {
   start(token, getClientId(storage));
 }
