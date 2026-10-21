@@ -3,9 +3,15 @@ import { PROFILES } from "./profiles";
 export interface ProfilePicker {
   /** Perfil ativo segundo o servidor; null quando não há conexão. */
   setCurrent: (index: number | null) => void;
+  /** O PC está esperando o dono confirmar o pedido: o botão fica pendente por mais tempo. */
+  waitingForPc: () => void;
+  /** O pedido foi recusado ou expirou: o botão volta ao normal. */
+  cancelPending: () => void;
 }
 
 const PENDING_TIMEOUT_MS = 4000;
+/** Quanto o botão espera a confirmação no PC (o PC desiste antes, em 60 s). */
+const PC_WAIT_TIMEOUT_MS = 90_000;
 
 /**
  * Seletor de perfil. A escolha só vale quando o servidor confirma: até lá o botão fica
@@ -50,5 +56,10 @@ export function mountProfilePicker(container: HTMLElement, onPick: (index: numbe
       clearPending();
       render();
     },
+    waitingForPc() {
+      clearTimeout(pendingTimer);
+      pendingTimer = setTimeout(clearPending, PC_WAIT_TIMEOUT_MS);
+    },
+    cancelPending: clearPending,
   };
 }

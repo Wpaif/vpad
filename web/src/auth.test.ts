@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { clearToken, getToken, safeStorage, saveToken, wsUrl } from "./auth";
+import { clearToken, getDeviceId, getToken, safeStorage, saveDeviceId, saveToken, wsUrl } from "./auth";
 
 const TOKEN = "0123456789abcdef0123456789abcdef";
 
@@ -57,6 +57,31 @@ describe("token deste aparelho", () => {
     expect(getToken(quebrado)).toBeNull();
     expect(() => saveToken(quebrado, TOKEN)).not.toThrow();
     expect(() => clearToken(quebrado)).not.toThrow();
+  });
+});
+
+describe("id do aparelho (para o dono do PC liberar o teclado)", () => {
+  it("guarda o id recebido no pareamento", () => {
+    expect(getDeviceId(storage)).toBeNull();
+    saveDeviceId(storage, "ab12cd34");
+    expect(getDeviceId(storage)).toBe("ab12cd34");
+  });
+
+  it("ignora um valor guardado que não parece um id", () => {
+    storage.setItem("vpad:id", "<script>");
+    expect(getDeviceId(storage)).toBeNull();
+  });
+
+  it("esquecer o token esquece também o id", () => {
+    saveToken(storage, TOKEN);
+    saveDeviceId(storage, "ab12cd34");
+    clearToken(storage);
+    expect(getDeviceId(storage)).toBeNull();
+  });
+
+  it("armazenamento bloqueado não gera erro", () => {
+    expect(getDeviceId(quebrado)).toBeNull();
+    expect(() => saveDeviceId(quebrado, "ab12cd34")).not.toThrow();
   });
 });
 

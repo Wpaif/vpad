@@ -83,4 +83,30 @@ describe("mountProfilePicker", () => {
     picker.setCurrent(99);
     expect(buttons().every((b) => b.getAttribute("aria-pressed") === "false")).toBe(true);
   });
+
+  it("esperando a confirmação no PC o pendente não expira em 4 s", () => {
+    picker.setCurrent(0);
+    button(3).click();
+    picker.waitingForPc();
+    vi.advanceTimersByTime(30_000);
+    expect(button(3).hasAttribute("data-pending")).toBe(true);
+  });
+
+  it("recusa ou expiração do PC limpa o pendente", () => {
+    picker.setCurrent(0);
+    button(3).click();
+    picker.waitingForPc();
+    picker.cancelPending();
+    expect(button(3).hasAttribute("data-pending")).toBe(false);
+    expect(button(0).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("a confirmação chega como troca de perfil e também limpa o pendente", () => {
+    picker.setCurrent(0);
+    button(3).click();
+    picker.waitingForPc();
+    picker.setCurrent(3);
+    expect(button(3).hasAttribute("data-pending")).toBe(false);
+    expect(button(3).getAttribute("aria-pressed")).toBe("true");
+  });
 });

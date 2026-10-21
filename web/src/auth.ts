@@ -7,6 +7,8 @@
 type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const TOKEN_KEY = "vpad:token";
+const DEVICE_ID_KEY = "vpad:id";
+const DEVICE_ID_FORMAT = /^[0-9a-f]{8}$/;
 export const TOKEN_FORMAT = /^[0-9a-f]{32}$/i;
 
 /** localStorage, ou uma memória simples se o navegador o bloquear (navegação privada). */
@@ -43,12 +45,32 @@ export function saveToken(storage: Store, token: string): void {
   }
 }
 
-/** Esquece o token (por exemplo, quando o servidor o revogou). */
+/** Esquece o token e o id (por exemplo, quando o servidor revogou este aparelho). */
 export function clearToken(storage: Store): void {
+  for (const key of [TOKEN_KEY, DEVICE_ID_KEY]) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // armazenamento bloqueado
+    }
+  }
+}
+
+/** Id público deste aparelho na lista do servidor (não é segredo): o dono do PC o usa para liberar o teclado. */
+export function getDeviceId(storage: Store): string | null {
   try {
-    storage.removeItem(TOKEN_KEY);
+    const saved = storage.getItem(DEVICE_ID_KEY);
+    return saved !== null && DEVICE_ID_FORMAT.test(saved) ? saved : null;
   } catch {
-    // idem
+    return null;
+  }
+}
+
+export function saveDeviceId(storage: Store, id: string): void {
+  try {
+    storage.setItem(DEVICE_ID_KEY, id);
+  } catch {
+    // vale só nesta aba
   }
 }
 

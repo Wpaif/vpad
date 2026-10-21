@@ -4,6 +4,8 @@
 //!   `[3, ..8 bytes]`    ping, devolvido igual ao celular
 //!   `[4, indice]`       perfil: o celular pede a troca e o servidor informa o perfil ativo
 //!   `[5, 1]`            (servidor -> celular) acesso recusado: token ausente, inválido ou revogado
+//!   `[6, motivo]`       (servidor -> celular) sobre o pedido de ativar o modo teclado: 1 sem
+//!                       permissão, 2 aguardando o PC, 3 negado no PC, 4 expirou, 5 PC ocupado
 
 use crate::perfil::PERFIS;
 
@@ -12,6 +14,7 @@ const MSG_EIXO: u8 = 2;
 const MSG_PING: u8 = 3;
 const MSG_PERFIL: u8 = 4;
 const MSG_RECUSA: u8 = 5;
+const MSG_AVISO_DE_PERFIL: u8 = 6;
 
 const ULTIMO_BOTAO: u8 = 13;
 const ULTIMO_EIXO: u8 = 5;
@@ -37,6 +40,23 @@ pub enum Recusa {
 
 pub fn codificar_recusa(motivo: Recusa) -> [u8; 2] {
     [MSG_RECUSA, motivo as u8]
+}
+
+/// O que aconteceu com o pedido de ativar o modo teclado.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum AvisoDePerfil {
+    /// este aparelho não tem permissão para o modo teclado
+    SemPermissao = 1,
+    /// esperando quem está no PC confirmar
+    Aguardando = 2,
+    Negado = 3,
+    Expirou = 4,
+    /// o PC já está esperando resposta para outro pedido
+    Ocupado = 5,
+}
+
+pub fn codificar_aviso_de_perfil(aviso: AvisoDePerfil) -> [u8; 2] {
+    [MSG_AVISO_DE_PERFIL, aviso as u8]
 }
 
 /// Mensagem que informa ao celular qual perfil está ativo.
@@ -151,5 +171,14 @@ mod testes {
     #[test]
     fn codifica_a_recusa_para_o_celular() {
         assert_eq!(codificar_recusa(Recusa::NaoAutorizado), [5, 1]);
+    }
+
+    #[test]
+    fn codifica_os_avisos_sobre_o_pedido_de_perfil() {
+        assert_eq!(codificar_aviso_de_perfil(AvisoDePerfil::SemPermissao), [6, 1]);
+        assert_eq!(codificar_aviso_de_perfil(AvisoDePerfil::Aguardando), [6, 2]);
+        assert_eq!(codificar_aviso_de_perfil(AvisoDePerfil::Negado), [6, 3]);
+        assert_eq!(codificar_aviso_de_perfil(AvisoDePerfil::Expirou), [6, 4]);
+        assert_eq!(codificar_aviso_de_perfil(AvisoDePerfil::Ocupado), [6, 5]);
     }
 }

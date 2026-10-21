@@ -24,6 +24,11 @@ describe("loadKeyboard", () => {
     await expect(loadKeyboard("errado", fetchFn)).rejects.toThrow(/parear/i);
   });
 
+  it("403 explica que o aparelho não tem permissão para o modo teclado", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { erro: "x" }));
+    await expect(loadKeyboard("tok", fetchFn)).rejects.toThrow(/permissão/i);
+  });
+
   it("falha com mensagem clara se o servidor não responde ok", async () => {
     const fetchFn = vi.fn().mockResolvedValue(resposta(500, {}));
     await expect(loadKeyboard("tok", fetchFn)).rejects.toThrow(/500/);
@@ -46,6 +51,11 @@ describe("saveKeyboard", () => {
   it("repassa a mensagem de erro do servidor", async () => {
     const fetchFn = vi.fn().mockResolvedValue(resposta(400, { erro: "tecla desconhecida: Hyper" }));
     await expect(saveKeyboard({ A: "Hyper" }, "tok", fetchFn)).rejects.toThrow("tecla desconhecida: Hyper");
+  });
+
+  it("403 ao salvar também explica a falta de permissão", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { erro: "x" }));
+    await expect(saveKeyboard({ A: "Space" }, "tok", fetchFn)).rejects.toThrow(/permissão/i);
   });
 
   it("falha de rede vira erro legível", async () => {

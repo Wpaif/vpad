@@ -7,7 +7,11 @@ use tokio::sync::{
 };
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use vpad::{
-    acesso::Acesso, armazem::ArmazemMapa, dispositivos::Dispositivos, pareamento::Pareamento,
+    acesso::Acesso,
+    aprovacao::{Decisao, Pedido, Tipo},
+    armazem::ArmazemMapa,
+    dispositivos::Dispositivos,
+    pareamento::Pareamento,
     protocolo::Evento,
 };
 
@@ -27,14 +31,20 @@ async fn servidor() -> Servidor {
 }
 
 async fn servidor_com(inatividade: Duration) -> Servidor {
+    servidor_completo(inatividade, Duration::from_secs(30)).await
+}
+
+async fn servidor_completo(inatividade: Duration, prazo_da_aprovacao: Duration) -> Servidor {
     let (tx, eventos) = mpsc::unbounded_channel();
     let (perfil, perfil_rx) = watch::channel(0u8);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}/ws", listener.local_addr().unwrap());
-    let acesso = Acesso::novo(
+    let acesso = Acesso::com_opcoes(
         Dispositivos::em_memoria(),
         Pareamento::com_segredo(b"segredo-de-teste-123".to_vec()),
         inatividade,
+        vpad::alerta::ignorar(),
+        prazo_da_aprovacao,
     );
     let app = vpad::app_com(tx, perfil_rx, Arc::new(ArmazemMapa::em_memoria()), acesso.clone());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -45,6 +55,23 @@ async fn servidor_com(inatividade: Duration) -> Servidor {
 fn parear(s: &Servidor, nome: &str) -> (String, String) {
     let p = s.acesso.dispositivos().parear(nome, 0).unwrap();
     (p.id, p.token)
+}
+
+/// Pareia um aparelho que o dono do PC já autorizou a usar o modo teclado.
+fn parear_teclado(s: &Servidor, nome: &str) -> (String, String) {
+    let p = s.acesso.dispositivos().parear_com(nome, 0, true).unwrap();
+    (p.id, p.token)
+}
+
+/// Espera o pedido de aprovação aparecer no "terminal" e devolve o id dele.
+async fn pedido_pendente(s: &Servidor) -> Pedido {
+    for _ in 0..400 {
+        if let Some(p) = s.acesso.aprovacoes().pendente() {
+            return p;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("nenhum pedido de aprovação chegou ao terminal");
 }
 
 fn url_com(s: &Servidor, token: &str) -> String {
@@ -297,4 +324,202 @@ async fn aparelho_ativo_nao_e_desconectado() {
         assert_eq!(proxima(&mut ws).await.first(), Some(&3));
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+}
+
+// ---------- modo teclado: permissão por aparelho e confirmação no PC ----------
+
+const TECLADO: u8 = 3; // índice do perfil "teclado" em PERFIS
+
+fn pedir_perfil(indice: u8) -> Message {
+    Message::Binary(vec![4, indice].into())
+}
+
+#[tokio::test]
+async fn sem_permissao_o_pedido_de_teclado_e_recusado_e_nao_chega_ao_controle() {
+    let mut s = servidor().await;
+    let (_, token) = parear(&s, "iPad");
+    let mut ws = conectar(&s, &token).await;
+
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 1], "sem permissão");
+    silencio(&mut s.eventos).await;
+    assert!(s.acesso.aprovacoes().pendente().is_none(), "nem chega a perguntar ao dono do PC");
+}
+
+#[tokio::test]
+async fn com_permissao_o_pc_precisa_confirmar_e_so_entao_o_perfil_muda() {
+    let mut s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 2], "aguardando o PC");
+    let pedido = pedido_pendente(&s).await;
+    assert!(matches!(pedido.tipo, Tipo::AtivarTeclado { ref nome } if nome == "iPhone"));
+    silencio(&mut s.eventos).await; // ainda não mudou nada
+
+    s.acesso.aprovacoes().responder(pedido.id, Decisao::Aprovado { teclado: false });
+    assert_eq!(proximo(&mut s.eventos).await, Evento::TrocarPerfil(TECLADO));
+}
+
+#[tokio::test]
+async fn negar_no_pc_avisa_o_celular_e_nada_muda() {
+    let mut s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 2]);
+
+    let pedido = pedido_pendente(&s).await;
+    s.acesso.aprovacoes().responder(pedido.id, Decisao::Negado);
+    assert_eq!(proxima(&mut ws).await, vec![6, 3]);
+    silencio(&mut s.eventos).await;
+}
+
+#[tokio::test]
+async fn sem_resposta_no_pc_o_celular_e_avisado_de_que_expirou() {
+    let mut s = servidor_completo(Duration::from_secs(6), Duration::from_millis(150)).await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 2]);
+    assert_eq!(proxima(&mut ws).await, vec![6, 4]);
+    silencio(&mut s.eventos).await;
+}
+
+#[tokio::test]
+async fn o_celular_que_cai_enquanto_espera_cancela_o_pedido() {
+    let s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 2]);
+    pedido_pendente(&s).await;
+
+    drop(ws);
+    for _ in 0..200 {
+        if s.acesso.aprovacoes().pendente().is_none() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("o pedido continuou pendente depois que o celular desconectou");
+}
+
+#[tokio::test]
+async fn pedir_de_novo_enquanto_espera_nao_cria_outro_pedido() {
+    let mut s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 2]);
+    assert_eq!(proxima(&mut ws).await, vec![6, 2]);
+
+    let pedido = pedido_pendente(&s).await;
+    s.acesso.aprovacoes().responder(pedido.id, Decisao::Aprovado { teclado: false });
+    assert_eq!(proximo(&mut s.eventos).await, Evento::TrocarPerfil(TECLADO));
+    silencio(&mut s.eventos).await; // um único pedido, uma única troca
+}
+
+#[tokio::test]
+async fn com_o_pc_ocupado_com_outro_pedido_o_celular_e_avisado() {
+    let s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    let mut ws = conectar(&s, &token).await;
+
+    let ocupando = tokio::spawn({
+        let aprovacoes = s.acesso.aprovacoes().clone();
+        async move {
+            let pedido = Pedido { id: 0, tipo: Tipo::Pareamento { nome: "outro".into() }, origem: None };
+            aprovacoes.solicitar(pedido, Duration::from_secs(10)).await
+        }
+    });
+    let outro = pedido_pendente(&s).await;
+
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proxima(&mut ws).await, vec![6, 5]);
+
+    s.acesso.aprovacoes().responder(outro.id, Decisao::Negado);
+    let _ = ocupando.await;
+}
+
+#[tokio::test]
+async fn se_o_teclado_ja_esta_ativo_o_pedido_passa_direto() {
+    let mut s = servidor().await;
+    let (_, token) = parear_teclado(&s, "iPhone");
+    s.perfil.send(TECLADO).unwrap();
+    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    assert_eq!(proxima(&mut ws).await, vec![4, TECLADO]);
+
+    ws.send(pedir_perfil(TECLADO)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::TrocarPerfil(TECLADO));
+    assert!(s.acesso.aprovacoes().pendente().is_none());
+}
+
+#[tokio::test]
+async fn aparelho_sem_permissao_continua_trocando_entre_os_perfis_de_controle() {
+    let mut s = servidor().await;
+    let (_, token) = parear(&s, "iPad");
+    let mut ws = conectar(&s, &token).await;
+    ws.send(pedir_perfil(1)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::TrocarPerfil(1));
+}
+
+#[tokio::test]
+async fn com_o_teclado_ativo_so_aparelhos_com_permissao_conseguem_digitar() {
+    let mut s = servidor().await;
+    let (_, com) = parear_teclado(&s, "iPhone");
+    let (_, sem) = parear(&s, "iPad");
+    s.perfil.send(TECLADO).unwrap();
+    let mut a = connect_async(url_com(&s, &com)).await.unwrap().0;
+    let mut b = connect_async(url_com(&s, &sem)).await.unwrap().0;
+    proxima(&mut a).await;
+    proxima(&mut b).await;
+
+    b.send(botao(0, true)).await.unwrap();
+    silencio(&mut s.eventos).await;
+    // o aparelho sem permissão segue conectado e o ping dele continua sendo respondido
+    b.send(ping()).await.unwrap();
+    assert_eq!(proxima(&mut b).await.first(), Some(&3));
+
+    a.send(botao(1, true)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::Botao { id: 1, pressionado: true });
+}
+
+#[tokio::test]
+async fn aparelho_sem_permissao_pode_sair_do_teclado_mas_os_botoes_dele_nao_passam() {
+    let mut s = servidor().await;
+    let (_, sem) = parear(&s, "iPad");
+    s.perfil.send(TECLADO).unwrap();
+    let mut b = connect_async(url_com(&s, &sem)).await.unwrap().0;
+    proxima(&mut b).await;
+
+    b.send(pedir_perfil(0)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::TrocarPerfil(0));
+}
+
+#[tokio::test]
+async fn tirar_a_permissao_com_o_aparelho_conectado_para_as_teclas_na_hora() {
+    let mut s = servidor().await;
+    let (id, token) = parear_teclado(&s, "iPhone");
+    s.perfil.send(TECLADO).unwrap();
+    let mut ws = connect_async(url_com(&s, &token)).await.unwrap().0;
+    proxima(&mut ws).await;
+
+    ws.send(botao(0, true)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::Botao { id: 0, pressionado: true });
+
+    s.acesso.dispositivos().definir_teclado(&id, false).unwrap();
+    ws.send(botao(0, false)).await.unwrap();
+    silencio(&mut s.eventos).await;
+}
+
+#[tokio::test]
+async fn fora_do_modo_teclado_a_permissao_nao_muda_nada_para_o_gamepad() {
+    let mut s = servidor().await;
+    let (_, sem) = parear(&s, "iPad");
+    let mut ws = conectar(&s, &sem).await;
+    ws.send(botao(0, true)).await.unwrap();
+    assert_eq!(proximo(&mut s.eventos).await, Evento::Botao { id: 0, pressionado: true });
 }

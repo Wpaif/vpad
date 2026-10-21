@@ -7,8 +7,19 @@ export class PairingError extends Error {
   retryAfter?: number;
 }
 
-/** Troca o código de 6 dígitos do terminal por um token exclusivo deste aparelho. */
-export async function pairDevice(code: string, name: string, fetchFn: FetchFn = fetch): Promise<string> {
+export interface Paired {
+  token: string;
+  /** id público do aparelho, para o dono do PC liberar o modo teclado */
+  id: string;
+}
+
+const DEVICE_ID = /^[0-9a-f]{8}$/;
+
+/**
+ * Troca o código de 6 dígitos do terminal por um token exclusivo deste aparelho. A resposta
+ * só chega depois que quem está no PC aprova o pedido (ele aparece no terminal).
+ */
+export async function pairDevice(code: string, name: string, fetchFn: FetchFn = fetch): Promise<Paired> {
   let res: Response;
   try {
     res = await fetchFn("/api/parear", {
@@ -19,10 +30,29 @@ export async function pairDevice(code: string, name: string, fetchFn: FetchFn = 
   } catch {
     throw new PairingError("Sem conexão com o PC.");
   }
-  const body = (await res.json().catch(() => ({}))) as { token?: unknown; segundos?: unknown };
+  const body = (await res.json().catch(() => ({}))) as {
+    token?: unknown;
+    id?: unknown;
+    segundos?: unknown;
+    erro?: unknown;
+  };
 
   if (res.status === 401) {
     throw new PairingError("Código incorreto ou expirado. Confira o código que aparece no terminal do PC.");
+  }
+  if (res.status === 403) {
+    if (typeof body.erro === "string" && /fechado/i.test(body.erro)) {
+      throw new PairingError(
+        "O pareamento está fechado. No PC, pressione Enter no terminal do vpad para abri-lo e use o código novo.",
+      );
+    }
+    throw new PairingError("O pedido foi negado no PC.");
+  }
+  if (res.status === 408) {
+    throw new PairingError("Ninguém aprovou o pedido no PC a tempo. Abra o pareamento de novo no PC e tente outra vez.");
+  }
+  if (res.status === 409) {
+    throw new PairingError("Já há outro pedido esperando aprovação no PC. Tente de novo em instantes.");
   }
   if (res.status === 429) {
     const seconds = Number(body.segundos ?? res.headers.get("Retry-After")) || 60;
@@ -34,7 +64,8 @@ export async function pairDevice(code: string, name: string, fetchFn: FetchFn = 
   if (typeof body.token !== "string" || !TOKEN_FORMAT.test(body.token)) {
     throw new PairingError("Resposta inesperada do servidor.");
   }
-  return body.token;
+  const id = typeof body.id === "string" && DEVICE_ID.test(body.id) ? body.id : "";
+  return { token: body.token, id };
 }
 
 /** Nome curto que identifica este aparelho na lista do servidor. */
@@ -50,8 +81,8 @@ export function deviceName(userAgent: string, touchPoints = 0): string {
 }
 
 export interface PairingDeps {
-  pair: (code: string) => Promise<string>;
-  onPaired: (token: string) => void;
+  pair: (code: string) => Promise<Paired>;
+  onPaired: (paired: Paired) => void;
 }
 
 export interface Pairing {
@@ -84,10 +115,13 @@ export function mountPairing(root: HTMLElement, deps: PairingDeps): Pairing {
     event.preventDefault();
     if (busy || blocked || input.value.length !== CODE_LENGTH) return;
     busy = true;
-    alertEl.textContent = "";
+    // com o código certo o pedido vai para o terminal do PC e a resposta só sai depois do "sim"
+    alertEl.textContent = "Se o código estiver certo, aprove o pedido no PC: ele aparece no terminal.";
     sync();
     try {
-      deps.onPaired(await deps.pair(input.value));
+      const paired = await deps.pair(input.value);
+      alertEl.textContent = "";
+      deps.onPaired(paired);
     } catch (error) {
       alertEl.textContent = error instanceof Error ? error.message : "Não consegui parear.";
       input.value = "";

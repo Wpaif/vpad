@@ -18,6 +18,13 @@ use crate::pareamento::iguais;
 const NOME_PADRAO: &str = "dispositivo";
 const NOME_MAXIMO: usize = 40;
 
+/// O que um aparelho pareado pode fazer além de controlar jogos.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Permissoes {
+    /// usar o modo teclado, que digita no PC
+    pub teclado: bool,
+}
+
 /// O que se pode mostrar de um dispositivo pareado (nunca o token nem o hash).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Registro {
@@ -25,6 +32,8 @@ pub struct Registro {
     pub nome: String,
     /// segundos desde 1970
     pub criado: u64,
+    /// o aparelho pode usar o modo teclado (que digita no PC)
+    pub teclado: bool,
 }
 
 /// Resultado de um pareamento: o token só existe aqui e no celular.
@@ -39,6 +48,9 @@ struct Guardado {
     nome: String,
     hash: String,
     criado: u64,
+    /// arquivos das versões anteriores não têm o campo: valem como "sem permissão"
+    #[serde(default)]
+    teclado: bool,
 }
 
 pub struct Dispositivos {
@@ -74,7 +86,8 @@ fn ler(arquivo: &Path) -> Result<Vec<Guardado>, String> {
     }
 }
 
-fn limpar_nome(nome: &str) -> String {
+/// Nome sem caracteres de controle (que poderiam mexer no terminal), com até 40 caracteres.
+pub fn limpar_nome(nome: &str) -> String {
     let limpo: String = nome.chars().filter(|c| !c.is_control()).collect();
     let limpo: String = limpo.trim().chars().take(NOME_MAXIMO).collect();
     let limpo = limpo.trim_end().to_string();
@@ -104,12 +117,18 @@ impl Dispositivos {
         }
     }
 
-    /// Cadastra um aparelho novo. Só vale se o arquivo for gravado com sucesso.
+    /// Cadastra um aparelho novo, sem permissão de teclado.
     pub fn parear(&self, nome: &str, agora: u64) -> io::Result<Pareado> {
+        self.parear_com(nome, agora, false)
+    }
+
+    /// Cadastra um aparelho novo, já com (ou sem) a permissão do modo teclado. Só vale se o
+    /// arquivo for gravado com sucesso.
+    pub fn parear_com(&self, nome: &str, agora: u64, teclado: bool) -> io::Result<Pareado> {
         self.recarregar(); // não desfazer o que outro processo acabou de revogar
         let token = gerar_token()?;
         let id = gerar_id()?;
-        let novo = Guardado { id: id.clone(), nome: limpar_nome(nome), hash: hash_do_token(&token), criado: agora };
+        let novo = Guardado { id: id.clone(), nome: limpar_nome(nome), hash: hash_do_token(&token), criado: agora, teclado };
 
         let mut lista = self.lista.lock().unwrap();
         let mut proxima = lista.clone();
@@ -127,11 +146,49 @@ impl Dispositivos {
         lista.iter().fold(false, |achou, g| iguais(&g.hash, &candidato) | achou)
     }
 
+    /// Uma consulta só: o token é de um aparelho pareado? Se for, quais as permissões dele.
+    pub fn consultar(&self, token: &str) -> Option<Permissoes> {
+        self.identificar(token).map(|r| Permissoes { teclado: r.teclado })
+    }
+
+    /// O aparelho dono deste token (id, nome, permissões), se for de um aparelho pareado.
+    pub fn identificar(&self, token: &str) -> Option<Registro> {
+        let candidato = hash_do_token(token);
+        let lista = self.lista.lock().unwrap();
+        // percorre todos, sem parar no primeiro, para o tempo não revelar a posição
+        lista.iter().fold(None, |achado, g| {
+            if iguais(&g.hash, &candidato) {
+                Some(Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado, teclado: g.teclado })
+            } else {
+                achado
+            }
+        })
+    }
+
+    /// O aparelho dono deste token pode usar o modo teclado? Token desconhecido: não.
+    pub fn teclado_permitido(&self, token: &str) -> bool {
+        let candidato = hash_do_token(token);
+        let lista = self.lista.lock().unwrap();
+        lista.iter().fold(false, |permitido, g| permitido | (iguais(&g.hash, &candidato) & g.teclado))
+    }
+
+    /// Libera ou tira o modo teclado do aparelho `id`. Devolve false se o id não existe.
+    pub fn definir_teclado(&self, id: &str, permitir: bool) -> io::Result<bool> {
+        self.recarregar();
+        let mut lista = self.lista.lock().unwrap();
+        let Some(posicao) = lista.iter().position(|g| g.id == id) else { return Ok(false) };
+        let mut proxima = lista.clone();
+        proxima[posicao].teclado = permitir;
+        self.gravar(&proxima)?;
+        *lista = proxima;
+        Ok(true)
+    }
+
     pub fn listar(&self) -> Vec<Registro> {
         let lista = self.lista.lock().unwrap();
         lista
             .iter()
-            .map(|g| Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado })
+            .map(|g| Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado, teclado: g.teclado })
             .collect()
     }
 
@@ -423,5 +480,138 @@ mod testes {
         fs::remove_file(pasta.arquivo()).unwrap();
         d.recarregar();
         assert!(!d.autorizado(&p.token));
+    }
+
+    // ---------- permissão do modo teclado, por aparelho ----------
+
+    #[test]
+    fn aparelho_novo_nasce_sem_permissao_de_teclado() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear("iPhone", 1000).unwrap();
+        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.listar()[0].teclado);
+    }
+
+    #[test]
+    fn pode_nascer_com_a_permissao_se_o_dono_do_pc_aprovou_assim() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone", 1000, true).unwrap();
+        assert!(d.teclado_permitido(&p.token));
+        assert!(d.listar()[0].teclado);
+    }
+
+    #[test]
+    fn a_permissao_e_so_do_aparelho_que_a_recebeu() {
+        let d = Dispositivos::em_memoria();
+        let a = d.parear_com("iPhone", 1000, true).unwrap();
+        let b = d.parear("iPad", 1001).unwrap();
+        assert!(d.teclado_permitido(&a.token));
+        assert!(!d.teclado_permitido(&b.token));
+    }
+
+    #[test]
+    fn token_desconhecido_ou_vazio_nunca_tem_permissao() {
+        let d = Dispositivos::em_memoria();
+        d.parear_com("iPhone", 1000, true).unwrap();
+        for ruim in ["", "errado", "0123456789abcdef0123456789abcdef"] {
+            assert!(!d.teclado_permitido(ruim), "{ruim:?}");
+        }
+    }
+
+    #[test]
+    fn permitir_e_negar_depois_de_pareado() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear("iPhone", 1000).unwrap();
+        assert!(d.definir_teclado(&p.id, true).unwrap());
+        assert!(d.teclado_permitido(&p.token));
+        assert!(d.definir_teclado(&p.id, false).unwrap());
+        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.definir_teclado("naoexiste", true).unwrap(), "id desconhecido");
+    }
+
+    #[test]
+    fn a_permissao_sobrevive_ao_reinicio_e_arquivos_antigos_valem_como_negado() {
+        let pasta = Pasta::nova("perm-teclado");
+        let d = Dispositivos::com_arquivo(pasta.arquivo());
+        let p = d.parear_com("iPhone", 1000, true).unwrap();
+        assert!(Dispositivos::com_arquivo(pasta.arquivo()).teclado_permitido(&p.token));
+
+        // arquivo das versões anteriores: sem o campo `teclado`
+        let antigo = Pasta::nova("perm-antigo");
+        fs::create_dir_all(antigo.arquivo().parent().unwrap()).unwrap();
+        let token = "0123456789abcdef0123456789abcdef";
+        fs::write(
+            antigo.arquivo(),
+            format!(r#"[{{"id":"ab12cd34","nome":"iPhone","hash":"{}","criado":1}}]"#, hash_do_token(token)),
+        )
+        .unwrap();
+        let d = Dispositivos::com_arquivo(antigo.arquivo());
+        assert!(d.autorizado(token), "continua pareado");
+        assert!(!d.teclado_permitido(token), "mas sem teclado até o dono do PC liberar");
+    }
+
+    #[test]
+    fn mudar_a_permissao_por_outro_processo_vale_depois_de_recarregar() {
+        let pasta = Pasta::nova("perm-recarrega");
+        let servidor = Dispositivos::com_arquivo(pasta.arquivo());
+        let p = servidor.parear_com("iPhone", 1000, true).unwrap();
+
+        Dispositivos::com_arquivo(pasta.arquivo()).definir_teclado(&p.id, false).unwrap();
+
+        assert!(servidor.teclado_permitido(&p.token), "ainda não leu o arquivo");
+        servidor.recarregar();
+        assert!(!servidor.teclado_permitido(&p.token));
+    }
+
+    #[test]
+    fn revogar_o_aparelho_tira_tambem_a_permissao() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone", 1000, true).unwrap();
+        d.revogar(&p.id).unwrap();
+        assert!(!d.teclado_permitido(&p.token));
+    }
+
+    #[test]
+    fn falha_ao_gravar_a_permissao_devolve_erro_e_nao_muda_nada() {
+        let pasta = Pasta::nova("perm-falha");
+        let d = Dispositivos::com_arquivo(pasta.arquivo());
+        let p = d.parear("iPhone", 1000).unwrap();
+        // depois de pareado, a pasta vira um arquivo comum: não dá mais para gravar
+        fs::remove_dir_all(pasta.arquivo().parent().unwrap()).unwrap();
+        fs::write(pasta.arquivo().parent().unwrap(), "x").unwrap();
+        assert!(d.definir_teclado(&p.id, true).is_err());
+        assert!(!d.teclado_permitido(&p.token));
+    }
+
+    // ---------- consulta única (autorizado + permissões) ----------
+
+    #[test]
+    fn consultar_devolve_as_permissoes_do_aparelho_ou_nada_se_nao_for_pareado() {
+        let d = Dispositivos::em_memoria();
+        let sem = d.parear("iPad", 1000).unwrap();
+        let com = d.parear_com("iPhone", 1001, true).unwrap();
+        assert_eq!(d.consultar(&sem.token), Some(Permissoes { teclado: false }));
+        assert_eq!(d.consultar(&com.token), Some(Permissoes { teclado: true }));
+        assert_eq!(d.consultar("errado"), None);
+        assert_eq!(d.consultar(""), None);
+    }
+
+    #[test]
+    fn consultar_acompanha_a_revogacao_e_a_mudanca_de_permissao() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone", 1000, true).unwrap();
+        d.definir_teclado(&p.id, false).unwrap();
+        assert_eq!(d.consultar(&p.token), Some(Permissoes { teclado: false }));
+        d.revogar(&p.id).unwrap();
+        assert_eq!(d.consultar(&p.token), None);
+    }
+
+    #[test]
+    fn identificar_devolve_id_e_nome_so_para_tokens_pareados() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear_com("iPhone do Wilian", 1000, true).unwrap();
+        let r = d.identificar(&p.token).unwrap();
+        assert_eq!((r.id.as_str(), r.nome.as_str(), r.teclado), (p.id.as_str(), "iPhone do Wilian", true));
+        assert!(d.identificar("errado").is_none());
     }
 }

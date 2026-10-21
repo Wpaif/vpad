@@ -3,7 +3,7 @@
 
 use std::{io, sync::Arc, time::Duration};
 
-use axum::Router;
+use axum::{Router, extract::ConnectInfo};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder,
@@ -21,7 +21,7 @@ const TEMPO_DO_HANDSHAKE: Duration = Duration::from_secs(10);
 pub async fn servir(listener: TcpListener, config: Arc<ServerConfig>, app: Router) -> io::Result<()> {
     let acceptor = TlsAcceptor::from(config);
     loop {
-        let (tcp, _) = match listener.accept().await {
+        let (tcp, origem) = match listener.accept().await {
             Ok(conexao) => conexao,
             Err(e) => {
                 // por exemplo, falta de descritores de arquivo: espera um pouco e segue
@@ -34,7 +34,8 @@ pub async fn servir(listener: TcpListener, config: Arc<ServerConfig>, app: Route
         let _ = tcp.set_nodelay(true);
 
         let acceptor = acceptor.clone();
-        let app = app.clone();
+        // cada requisição desta conexão leva o IP de quem conectou (usado nos alertas)
+        let app = app.clone().layer(axum::Extension(ConnectInfo(origem)));
         tokio::spawn(async move {
             let Ok(Ok(tls)) = tokio::time::timeout(TEMPO_DO_HANDSHAKE, acceptor.accept(tcp)).await else {
                 return;

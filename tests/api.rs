@@ -10,7 +10,8 @@ use serde_json::{Value, json};
 use tokio::sync::{mpsc, watch};
 use tower::ServiceExt;
 use vpad::{
-    acesso::Acesso, armazem::ArmazemMapa, dispositivos::Dispositivos, mapa::Mapa, pareamento::Pareamento,
+    acesso::Acesso, alerta::Alerta, aprovacao::Decisao, armazem::ArmazemMapa, dispositivos::Dispositivos,
+    mapa::Mapa, pareamento::Pareamento,
 };
 
 struct Ambiente {
@@ -19,6 +20,7 @@ struct Ambiente {
     armazem: Arc<ArmazemMapa>,
     /// token de um aparelho já pareado
     token: String,
+    alertas: Arc<std::sync::Mutex<Vec<Alerta>>>,
 }
 
 fn agora() -> u64 {
@@ -26,14 +28,24 @@ fn agora() -> u64 {
 }
 
 fn ambiente_com(armazem: Arc<ArmazemMapa>) -> Ambiente {
-    let acesso = Acesso::novo(
+    ambiente_completo(armazem, Duration::from_secs(30))
+}
+
+fn ambiente_completo(armazem: Arc<ArmazemMapa>, prazo_da_aprovacao: Duration) -> Ambiente {
+    let alertas = Arc::new(std::sync::Mutex::new(vec![]));
+    let destino = alertas.clone();
+    let acesso = Acesso::com_opcoes(
         Dispositivos::em_memoria(),
         Pareamento::com_segredo(b"segredo-de-teste-123".to_vec()),
         Duration::from_secs(6),
+        Arc::new(move |a| destino.lock().unwrap().push(a)),
+        prazo_da_aprovacao,
     );
-    let token = acesso.dispositivos().parear("teste", 0).unwrap().token;
+    // o pareamento nasce fechado; os testes que pareiam o abrem
+    // o aparelho de teste já tem a permissão do modo teclado
+    let token = acesso.dispositivos().parear_com("teste", 0, true).unwrap().token;
     let app = vpad::app_com(mpsc::unbounded_channel().0, watch::channel(0).1, armazem.clone(), acesso.clone());
-    Ambiente { app, acesso, armazem, token }
+    Ambiente { app, acesso, armazem, token, alertas }
 }
 
 fn ambiente() -> Ambiente {
@@ -199,12 +211,44 @@ async fn aparelho_revogado_perde_o_acesso_a_api() {
 
 // ---------- pareamento ----------
 
+/// Abre o pareamento no PC e envia o código: sem ninguém aprovando no terminal.
 async fn parear(a: &Ambiente, codigo: &str, nome: Option<&str>) -> (StatusCode, header::HeaderMap, Value) {
+    a.acesso.pareamento().abrir(agora(), 3600); // o PC abriu o pareamento
+    parear_sem_abrir(a, codigo, nome).await
+}
+
+async fn parear_sem_abrir(a: &Ambiente, codigo: &str, nome: Option<&str>) -> (StatusCode, header::HeaderMap, Value) {
     let corpo = match nome {
         Some(n) => json!({"codigo": codigo, "nome": n}),
         None => json!({"codigo": codigo}),
     };
     chamar_com(&a.app, "POST", "/api/parear", Some(&corpo.to_string()), None).await
+}
+
+/// O PC abre o pareamento, o celular envia o código e quem está no terminal responde `decisao`.
+async fn parear_e_responder(
+    a: &Ambiente,
+    codigo: &str,
+    nome: Option<&str>,
+    decisao: Decisao,
+) -> (StatusCode, header::HeaderMap, Value) {
+    a.acesso.pareamento().abrir(agora(), 3600);
+    let pedido = parear_sem_abrir(a, codigo, nome);
+    let terminal = async {
+        for _ in 0..400 {
+            if let Some(p) = a.acesso.aprovacoes().pendente() {
+                a.acesso.aprovacoes().responder(p.id, decisao);
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        panic!("o pedido de aprovação não chegou ao terminal");
+    };
+    tokio::join!(pedido, terminal).0
+}
+
+async fn parear_aprovado(a: &Ambiente, codigo: &str, nome: Option<&str>) -> (StatusCode, header::HeaderMap, Value) {
+    parear_e_responder(a, codigo, nome, Decisao::Aprovado { teclado: false }).await
 }
 
 fn codigo_certo(a: &Ambiente) -> String {
@@ -218,9 +262,10 @@ fn codigo_errado(a: &Ambiente) -> String {
 }
 
 #[tokio::test]
-async fn o_codigo_certo_devolve_um_token_exclusivo_que_abre_a_api() {
+async fn o_codigo_certo_aprovado_no_pc_devolve_um_token_exclusivo_que_abre_a_api() {
     let a = ambiente();
-    let (status, _, corpo) = parear(&a, &codigo_certo(&a), Some("iPhone do Wilian")).await;
+    let (status, _, corpo) =
+        parear_e_responder(&a, &codigo_certo(&a), Some("iPhone do Wilian"), Decisao::Aprovado { teclado: true }).await;
     assert_eq!(status, StatusCode::OK);
 
     let token = corpo["token"].as_str().unwrap().to_string();
@@ -230,34 +275,138 @@ async fn o_codigo_certo_devolve_um_token_exclusivo_que_abre_a_api() {
     assert_ne!(token, a.token, "cada aparelho tem o seu");
 
     let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&format!("Bearer {token}"))).await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "foi aprovado com a permissão do modo teclado");
 
     let nomes: Vec<_> = a.acesso.dispositivos().listar().into_iter().map(|d| d.nome).collect();
     assert!(nomes.contains(&"iPhone do Wilian".to_string()));
 }
 
 #[tokio::test]
+async fn aparelho_aprovado_sem_teclado_esta_pareado_mas_nao_acessa_o_mapa_de_teclas() {
+    let a = ambiente();
+    let (status, _, corpo) = parear_aprovado(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = corpo["token"].as_str().unwrap();
+    assert!(a.acesso.autorizado(token));
+    let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&format!("Bearer {token}"))).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn o_celular_fica_esperando_a_resposta_do_pc() {
+    let a = ambiente();
+    a.acesso.pareamento().abrir(agora(), 3600);
+    let codigo = codigo_certo(&a);
+
+    let requisicao = tokio::spawn({
+        let app = a.app.clone();
+        async move {
+            let corpo = json!({"codigo": codigo, "nome": "iPhone"}).to_string();
+            chamar_com(&app, "POST", "/api/parear", Some(&corpo), None).await
+        }
+    });
+    // enquanto ninguém responde no terminal, a requisição não termina
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    assert!(!requisicao.is_finished());
+    assert!(a.acesso.aprovacoes().pendente().is_some());
+    assert_eq!(a.acesso.dispositivos().listar().len(), 1, "só o aparelho de teste: nada foi cadastrado");
+
+    let id = a.acesso.aprovacoes().pendente().unwrap().id;
+    a.acesso.aprovacoes().responder(id, Decisao::Aprovado { teclado: false });
+    assert_eq!(requisicao.await.unwrap().0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn aprovar_com_teclado_libera_o_modo_teclado_do_novo_aparelho() {
+    let a = ambiente();
+    let (_, _, corpo) = parear_e_responder(&a, &codigo_certo(&a), None, Decisao::Aprovado { teclado: true }).await;
+    assert!(a.acesso.dispositivos().teclado_permitido(corpo["token"].as_str().unwrap()));
+}
+
+#[tokio::test]
 async fn o_nome_e_opcional() {
     let a = ambiente();
-    let (status, _, _) = parear(&a, &codigo_certo(&a), None).await;
+    let (status, _, _) = parear_aprovado(&a, &codigo_certo(&a), None).await;
     assert_eq!(status, StatusCode::OK);
 }
 
 #[tokio::test]
-async fn codigo_errado_e_401_e_nao_pareia() {
+async fn negado_no_pc_e_403_sem_token() {
+    let a = ambiente();
+    let antes = a.acesso.dispositivos().listar().len();
+    let (status, _, corpo) = parear_e_responder(&a, &codigo_certo(&a), Some("intruso"), Decisao::Negado).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("negado"));
+    assert!(corpo.get("token").is_none());
+    assert_eq!(a.acesso.dispositivos().listar().len(), antes);
+}
+
+#[tokio::test]
+async fn ninguem_aprovar_no_prazo_e_408() {
+    let a = ambiente_completo(Arc::new(ArmazemMapa::em_memoria()), Duration::from_millis(100));
+    let (status, _, corpo) = parear(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::REQUEST_TIMEOUT);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("aprov"));
+}
+
+#[tokio::test]
+async fn depois_de_um_pareamento_a_janela_fecha_e_um_novo_precisa_ser_aberto_no_pc() {
+    let a = ambiente();
+    assert_eq!(parear_aprovado(&a, &codigo_certo(&a), None).await.0, StatusCode::OK);
+    // outro código válido, mas ninguém reabriu o pareamento no terminal
+    let outro = a.acesso.pareamento().codigo_atual(agora() + 30);
+    let (status, _, corpo) = parear_sem_abrir(&a, &outro, None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("fechado"));
+}
+
+#[tokio::test]
+async fn pedido_enquanto_outro_espera_aprovacao_no_pc_e_409() {
+    use vpad::aprovacao::{Pedido, Tipo};
+    let a = ambiente();
+    a.acesso.pareamento().abrir(agora(), 3600);
+
+    // outro pedido (um aparelho querendo ativar o modo teclado) já espera no terminal
+    let outro = tokio::spawn({
+        let aprovacoes = a.acesso.aprovacoes().clone();
+        async move {
+            let pedido = Pedido { id: 0, tipo: Tipo::AtivarTeclado { nome: "iPad".into() }, origem: None };
+            aprovacoes.solicitar(pedido, Duration::from_secs(10)).await
+        }
+    });
+    for _ in 0..200 {
+        if a.acesso.aprovacoes().pendente().is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+
+    let (status, _, corpo) = parear_sem_abrir(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("aguardando"));
+    assert!(a.acesso.pareamento().aberto(agora()), "o código foi gasto, mas a janela continua aberta");
+
+    let id = a.acesso.aprovacoes().pendente().unwrap().id;
+    a.acesso.aprovacoes().responder(id, Decisao::Negado);
+    let _ = outro.await;
+}
+
+#[tokio::test]
+async fn codigo_errado_e_401_e_nao_pareia_nem_pede_aprovacao() {
     let a = ambiente();
     let antes = a.acesso.dispositivos().listar().len();
     let (status, _, corpo) = parear(&a, &codigo_errado(&a), None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("código"));
     assert_eq!(a.acesso.dispositivos().listar().len(), antes);
+    assert!(a.acesso.aprovacoes().pendente().is_none());
 }
 
 #[tokio::test]
 async fn cada_codigo_so_pareia_uma_vez() {
     let a = ambiente();
     let codigo = codigo_certo(&a);
-    assert_eq!(parear(&a, &codigo, None).await.0, StatusCode::OK);
+    assert_eq!(parear_aprovado(&a, &codigo, None).await.0, StatusCode::OK);
     assert_eq!(parear(&a, &codigo, None).await.0, StatusCode::UNAUTHORIZED);
 }
 
@@ -289,4 +438,95 @@ async fn pareamento_so_aceita_post() {
     let a = ambiente();
     let (status, _, _) = chamar_com(&a.app, "GET", "/api/parear", None, None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+// ---------- pareamento fechado e alertas ----------
+
+#[tokio::test]
+async fn com_o_pareamento_fechado_o_codigo_certo_e_recusado_com_403_e_instrucao() {
+    let a = ambiente();
+    let antes = a.acesso.dispositivos().listar().len();
+    let (status, _, corpo) = parear_sem_abrir(&a, &codigo_certo(&a), None).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let erro = corpo["erro"].as_str().unwrap().to_lowercase();
+    assert!(erro.contains("fechado") && erro.contains("enter"), "{erro}");
+    assert_eq!(a.acesso.dispositivos().listar().len(), antes);
+}
+
+#[tokio::test]
+async fn abrir_o_pareamento_no_pc_libera_o_mesmo_codigo() {
+    let a = ambiente();
+    let codigo = codigo_certo(&a);
+    assert_eq!(parear_sem_abrir(&a, &codigo, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(parear_aprovado(&a, &codigo, None).await.0, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn os_alertas_levam_o_ip_de_quem_tentou() {
+    let a = ambiente();
+    a.acesso.pareamento().abrir(agora(), 3600);
+    let origem: std::net::SocketAddr = "192.168.68.77:51234".parse().unwrap();
+    let corpo = json!({"codigo": codigo_errado(&a)}).to_string();
+    let mut req = Request::builder()
+        .method("POST")
+        .uri("/api/parear")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(corpo))
+        .unwrap();
+    req.extensions_mut().insert(axum::extract::ConnectInfo(origem));
+    let res = a.app.clone().oneshot(req).await.unwrap();
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    assert_eq!(
+        *a.alertas.lock().unwrap(),
+        vec![Alerta::CodigoErrado { origem: Some(origem.ip()), erros: 1 }]
+    );
+}
+
+#[tokio::test]
+async fn sem_informacao_de_origem_o_alerta_diz_que_e_desconhecida() {
+    let a = ambiente();
+    parear(&a, &codigo_errado(&a), None).await;
+    assert_eq!(*a.alertas.lock().unwrap(), vec![Alerta::CodigoErrado { origem: None, erros: 1 }]);
+}
+
+#[tokio::test]
+async fn tentativa_com_o_pareamento_fechado_tambem_gera_alerta() {
+    let a = ambiente();
+    parear_sem_abrir(&a, &codigo_certo(&a), None).await;
+    assert_eq!(*a.alertas.lock().unwrap(), vec![Alerta::PareamentoFechado { origem: None }]);
+}
+
+// ---------- a API do teclado exige a permissão do modo teclado ----------
+
+#[tokio::test]
+async fn aparelho_sem_permissao_de_teclado_nao_le_nem_grava_o_mapa() {
+    let a = ambiente();
+    let sem = a.acesso.dispositivos().parear("iPad", 0).unwrap().token;
+    let auth = format!("Bearer {sem}");
+
+    let (status, _, corpo) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&auth)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("teclado"));
+
+    let p = pedido(json!({"A": "Space"}));
+    let (status, _, _) = chamar_com(&a.app, "PUT", "/api/teclado", Some(&p), Some(&auth)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(*a.armazem.atual(), Mapa::padrao());
+}
+
+#[tokio::test]
+async fn token_invalido_continua_401_e_nao_403() {
+    let a = ambiente();
+    let (status, _, _) = chamar_com(&a.app, "GET", "/api/teclado", None, Some("Bearer errado")).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn permissao_tirada_vale_na_proxima_chamada() {
+    let a = ambiente();
+    let id = a.acesso.dispositivos().listar()[0].id.clone();
+    assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::OK);
+    a.acesso.dispositivos().definir_teclado(&id, false).unwrap();
+    assert_eq!(teclado(&a, "GET", None).await.0, StatusCode::FORBIDDEN);
 }
