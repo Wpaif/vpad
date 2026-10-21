@@ -1,0 +1,38 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock é versionado (o projeto é um binário)
+
+# Editores / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Ambiente / segredos
+.env
+.env.*
+!.env.example
+
+# Certificados locais (HTTPS na rede local, ex.: mkcert)
+*.pem
+*.key
+*.crt
+
+# Logs e temporários
+*.log
+tmp/
+
+# Claude Code (configurações locais; os agentes em .claude/agents são versionados)
+.claude/settings.local.json
+CLAUDE.local.md
+
+# mise
+.mise.local.toml
