@@ -9,14 +9,33 @@ use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, watch};
 use tower::ServiceExt;
-use vpad::{armazem::ArmazemMapa, mapa::Mapa};
+use vpad::{acesso::Acesso, armazem::ArmazemMapa, mapa::Mapa};
+
+const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
 fn app(armazem: Arc<ArmazemMapa>) -> Router {
-    vpad::app_com(mpsc::unbounded_channel().0, watch::channel(0).1, armazem)
+    vpad::app_com(
+        mpsc::unbounded_channel().0,
+        watch::channel(0).1,
+        armazem,
+        Acesso::novo(TOKEN, std::time::Duration::from_secs(6)),
+    )
 }
 
 async fn chamar(app: &Router, metodo: &str, corpo: Option<&str>) -> (StatusCode, Value) {
+    chamar_com(app, metodo, corpo, Some(&format!("Bearer {TOKEN}"))).await
+}
+
+async fn chamar_com(
+    app: &Router,
+    metodo: &str,
+    corpo: Option<&str>,
+    autorizacao: Option<&str>,
+) -> (StatusCode, Value) {
     let mut req = Request::builder().method(metodo).uri("/api/teclado");
+    if let Some(a) = autorizacao {
+        req = req.header(header::AUTHORIZATION, a);
+    }
     let body = match corpo {
         Some(c) => {
             req = req.header(header::CONTENT_TYPE, "application/json");
@@ -124,4 +143,27 @@ async fn outros_metodos_nao_sao_aceitos() {
     let app = app(Arc::new(ArmazemMapa::em_memoria()));
     let (status, _) = chamar(&app, "DELETE", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED);
+}
+
+#[tokio::test]
+async fn sem_o_token_certo_a_api_responde_401_e_nao_muda_nada() {
+    let armazem = Arc::new(ArmazemMapa::em_memoria());
+    let app = app(armazem.clone());
+
+    for autorizacao in [
+        None,
+        Some("Bearer errado"),
+        Some("Bearer "),
+        Some(TOKEN),                          // sem o prefixo Bearer
+        Some("Basic 0123456789abcdef0123456789abcdef"),
+    ] {
+        let (status, corpo) = chamar_com(&app, "GET", None, autorizacao).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "GET com {autorizacao:?}");
+        assert!(corpo["erro"].is_string());
+
+        let pedido = pedido(json!({"A": "Space"}));
+        let (status, _) = chamar_com(&app, "PUT", Some(&pedido), autorizacao).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "PUT com {autorizacao:?}");
+    }
+    assert_eq!(*armazem.atual(), Mapa::padrao());
 }

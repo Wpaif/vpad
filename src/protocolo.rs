@@ -3,6 +3,7 @@
 //!   `[2, id, lo, hi]`   eixo, i16 little-endian (0..=3 analógicos, 4..=5 gatilhos 0..=255)
 //!   `[3, ..8 bytes]`    ping, devolvido igual ao celular
 //!   `[4, indice]`       perfil: o celular pede a troca e o servidor informa o perfil ativo
+//!   `[5, motivo]`       (servidor -> celular) acesso recusado: 1 = ocupado, 2 = não autorizado
 
 use crate::perfil::PERFIS;
 
@@ -10,6 +11,7 @@ const MSG_BOTAO: u8 = 1;
 const MSG_EIXO: u8 = 2;
 const MSG_PING: u8 = 3;
 const MSG_PERFIL: u8 = 4;
+const MSG_RECUSA: u8 = 5;
 
 const ULTIMO_BOTAO: u8 = 13;
 const ULTIMO_EIXO: u8 = 5;
@@ -24,6 +26,19 @@ pub enum Evento {
     TrocarPerfil(u8),
     /// Gerado pelo servidor quando o celular desconecta.
     SoltarTudo,
+}
+
+/// Por que o servidor recusou a conexão.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Recusa {
+    /// outro aparelho já está controlando
+    Ocupado = 1,
+    /// token ausente ou errado
+    NaoAutorizado = 2,
+}
+
+pub fn codificar_recusa(motivo: Recusa) -> [u8; 2] {
+    [MSG_RECUSA, motivo as u8]
 }
 
 /// Mensagem que informa ao celular qual perfil está ativo.
@@ -133,5 +148,11 @@ mod testes {
     #[test]
     fn codifica_o_perfil_atual_para_o_celular() {
         assert_eq!(codificar_perfil(2), [4, 2]);
+    }
+
+    #[test]
+    fn codifica_os_motivos_de_recusa_para_o_celular() {
+        assert_eq!(codificar_recusa(Recusa::Ocupado), [5, 1]);
+        assert_eq!(codificar_recusa(Recusa::NaoAutorizado), [5, 2]);
     }
 }

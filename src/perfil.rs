@@ -103,19 +103,32 @@ impl Perfil {
     }
 }
 
-/// Lê `--perfil <id>` ou `--perfil=<id>` (sem o nome do programa). Padrão: Xbox 360.
-pub fn perfil_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<&'static Perfil, String> {
+/// O que a linha de comando pede.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Opcoes {
+    pub perfil: &'static Perfil,
+    /// gerar outro token de acesso, invalidando o que o celular já tem
+    pub novo_token: bool,
+}
+
+/// Lê `--perfil <id>` (ou `--perfil=<id>`) e `--novo-token`, sem o nome do programa.
+/// O perfil padrão é o Xbox 360.
+pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<Opcoes, String> {
     let mut id = XBOX_360.id.to_string();
+    let mut novo_token = false;
     while let Some(arg) = args.next() {
         if arg == "--perfil" {
             id = args.next().ok_or("--perfil precisa de um valor")?;
         } else if let Some(valor) = arg.strip_prefix("--perfil=") {
             id = valor.to_string();
+        } else if arg == "--novo-token" {
+            novo_token = true;
         } else {
             return Err(format!("argumento desconhecido: {arg}\n{}", uso()));
         }
     }
-    Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))
+    let perfil = Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))?;
+    Ok(Opcoes { perfil, novo_token })
 }
 
 /// Posição do perfil em `PERFIS`, que é o número trocado com o celular.
@@ -125,7 +138,7 @@ pub fn indice_do_perfil(id: &str) -> Option<u8> {
 
 fn uso() -> String {
     let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
-    format!("uso: vpad [--perfil <{}>]", ids.join("|"))
+    format!("uso: vpad [--perfil <{}>] [--novo-token]", ids.join("|"))
 }
 
 #[cfg(test)]
@@ -185,21 +198,21 @@ mod testes {
 
     #[test]
     fn sem_argumento_usa_xbox_360() {
-        assert_eq!(perfil_dos_argumentos(args(&[])).unwrap().id, "xbox360");
+        assert_eq!(opcoes_dos_argumentos(args(&[])).unwrap().perfil.id, "xbox360");
     }
 
     #[test]
     fn aceita_perfil_separado_ou_com_igual() {
-        assert_eq!(perfil_dos_argumentos(args(&["--perfil", "ds4"])).unwrap().id, "ds4");
+        assert_eq!(opcoes_dos_argumentos(args(&["--perfil", "ds4"])).unwrap().perfil.id, "ds4");
         assert_eq!(
-            perfil_dos_argumentos(args(&["--perfil=switch-pro"])).unwrap().id,
+            opcoes_dos_argumentos(args(&["--perfil=switch-pro"])).unwrap().perfil.id,
             "switch-pro"
         );
     }
 
     #[test]
     fn perfil_desconhecido_lista_as_opcoes() {
-        let erro = perfil_dos_argumentos(args(&["--perfil", "wii"])).unwrap_err();
+        let erro = opcoes_dos_argumentos(args(&["--perfil", "wii"])).unwrap_err();
         assert!(erro.contains("wii"));
         for p in PERFIS {
             assert!(erro.contains(p.id), "{erro}");
@@ -208,12 +221,12 @@ mod testes {
 
     #[test]
     fn perfil_sem_valor_e_erro() {
-        assert!(perfil_dos_argumentos(args(&["--perfil"])).is_err());
+        assert!(opcoes_dos_argumentos(args(&["--perfil"])).is_err());
     }
 
     #[test]
     fn argumento_desconhecido_e_erro() {
-        assert!(perfil_dos_argumentos(args(&["--foo"])).is_err());
+        assert!(opcoes_dos_argumentos(args(&["--foo"])).is_err());
     }
 
     #[test]
@@ -230,5 +243,31 @@ mod testes {
         assert_eq!(indice_do_perfil("switch-pro"), Some(2));
         assert_eq!(indice_do_perfil("teclado"), Some(3));
         assert_eq!(indice_do_perfil("wii"), None);
+    }
+
+    #[test]
+    fn por_padrao_reaproveita_o_token_salvo() {
+        assert!(!opcoes_dos_argumentos(args(&[])).unwrap().novo_token);
+    }
+
+    #[test]
+    fn novo_token_pode_vir_sozinho_ou_junto_do_perfil() {
+        let so = opcoes_dos_argumentos(args(&["--novo-token"])).unwrap();
+        assert!(so.novo_token);
+        assert_eq!(so.perfil.id, "xbox360");
+
+        let junto = opcoes_dos_argumentos(args(&["--perfil", "ds4", "--novo-token"])).unwrap();
+        assert!(junto.novo_token);
+        assert_eq!(junto.perfil.id, "ds4");
+
+        let invertido = opcoes_dos_argumentos(args(&["--novo-token", "--perfil=teclado"])).unwrap();
+        assert!(invertido.novo_token);
+        assert_eq!(invertido.perfil.id, "teclado");
+    }
+
+    #[test]
+    fn a_mensagem_de_uso_cita_novo_token() {
+        let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
+        assert!(erro.contains("--novo-token"), "{erro}");
     }
 }
