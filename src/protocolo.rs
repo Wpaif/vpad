@@ -2,10 +2,14 @@
 //!   `[1, id, down]`     botão (0..=9 botões, 10..=13 direcional)
 //!   `[2, id, lo, hi]`   eixo, i16 little-endian (0..=3 analógicos, 4..=5 gatilhos 0..=255)
 //!   `[3, ..8 bytes]`    ping, devolvido igual ao celular
+//!   `[4, indice]`       perfil: o celular pede a troca e o servidor informa o perfil ativo
+
+use crate::perfil::PERFIS;
 
 const MSG_BOTAO: u8 = 1;
 const MSG_EIXO: u8 = 2;
 const MSG_PING: u8 = 3;
+const MSG_PERFIL: u8 = 4;
 
 const ULTIMO_BOTAO: u8 = 13;
 const ULTIMO_EIXO: u8 = 5;
@@ -16,8 +20,15 @@ pub enum Evento {
     Botao { id: u8, pressionado: bool },
     Eixo { id: u8, valor: i16 },
     Ping,
+    /// Pedido do celular para usar outro perfil (índice em `PERFIS`).
+    TrocarPerfil(u8),
     /// Gerado pelo servidor quando o celular desconecta.
     SoltarTudo,
+}
+
+/// Mensagem que informa ao celular qual perfil está ativo.
+pub fn codificar_perfil(indice: u8) -> [u8; 2] {
+    [MSG_PERFIL, indice]
 }
 
 pub fn decodificar(dados: &[u8]) -> Option<Evento> {
@@ -36,6 +47,7 @@ pub fn decodificar(dados: &[u8]) -> Option<Evento> {
             Some(Evento::Eixo { id, valor })
         }
         [MSG_PING, ..] if dados.len() == 9 => Some(Evento::Ping),
+        [MSG_PERFIL, indice] if (indice as usize) < PERFIS.len() => Some(Evento::TrocarPerfil(indice)),
         _ => None,
     }
 }
@@ -102,5 +114,23 @@ mod testes {
         assert_eq!(decodificar(&[9, 1, 1]), None);
         assert_eq!(decodificar(&[1, 0]), None);
         assert_eq!(decodificar(&[2, 0, 1]), None);
+    }
+
+    #[test]
+    fn decodifica_troca_de_perfil() {
+        assert_eq!(decodificar(&[4, 0]), Some(Evento::TrocarPerfil(0)));
+        assert_eq!(decodificar(&[4, 2]), Some(Evento::TrocarPerfil(2)));
+    }
+
+    #[test]
+    fn rejeita_perfil_fora_da_lista() {
+        assert_eq!(decodificar(&[4, 3]), None);
+        assert_eq!(decodificar(&[4]), None);
+        assert_eq!(decodificar(&[4, 0, 0]), None);
+    }
+
+    #[test]
+    fn codifica_o_perfil_atual_para_o_celular() {
+        assert_eq!(codificar_perfil(2), [4, 2]);
     }
 }

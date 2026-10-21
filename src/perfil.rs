@@ -95,6 +95,11 @@ pub fn perfil_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<&
     Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))
 }
 
+/// Posição do perfil em `PERFIS`, que é o número trocado com o celular.
+pub fn indice_do_perfil(id: &str) -> Option<u8> {
+    PERFIS.iter().position(|p| p.id == id).map(|i| i as u8)
+}
+
 fn uso() -> String {
     let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
     format!("uso: vpad [--perfil <{}>]", ids.join("|"))
@@ -177,5 +182,20 @@ mod testes {
     #[test]
     fn argumento_desconhecido_e_erro() {
         assert!(perfil_dos_argumentos(args(&["--foo"])).is_err());
+    }
+
+    #[test]
+    fn ordem_dos_perfis_e_a_mesma_da_pagina() {
+        // web/src/profiles.ts usa estes mesmos índices: mudar a ordem exige mudar os dois lados.
+        let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
+        assert_eq!(ids, ["xbox360", "ds4", "switch-pro"]);
+    }
+
+    #[test]
+    fn indice_do_perfil_pelo_id() {
+        assert_eq!(indice_do_perfil("xbox360"), Some(0));
+        assert_eq!(indice_do_perfil("ds4"), Some(1));
+        assert_eq!(indice_do_perfil("switch-pro"), Some(2));
+        assert_eq!(indice_do_perfil("wii"), None);
     }
 }

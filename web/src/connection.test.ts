@@ -167,3 +167,27 @@ describe("ganchos do medidor", () => {
     expect(pongs).toEqual([[15, ts]]);
   });
 });
+
+describe("aviso de perfil", () => {
+  it("repassa o perfil informado pelo servidor", () => {
+    const perfis: number[] = [];
+    connect({
+      url: "ws://pc/ws",
+      WebSocketImpl: FakeSocket as unknown as typeof WebSocket,
+      onStatus: () => {},
+      onLatency: () => {},
+      onProfile: (i) => perfis.push(i),
+    });
+    last().open();
+    last().receive(Uint8Array.of(4, 2));
+    last().receive(Uint8Array.of(4, 0));
+    expect(perfis).toEqual([2, 0]);
+  });
+
+  it("um aviso de perfil não conta como pong", () => {
+    start();
+    last().open();
+    last().receive(Uint8Array.of(4, 1));
+    expect(latencies).toEqual([]);
+  });
+});

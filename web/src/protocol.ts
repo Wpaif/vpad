@@ -10,6 +10,7 @@ export enum Axis {
 const MSG_BUTTON = 1;
 const MSG_AXIS = 2;
 const MSG_PING = 3;
+const MSG_PROFILE = 4;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
@@ -37,4 +38,14 @@ export function encodePing(timestamp: number): Uint8Array<ArrayBuffer> {
 export function decodePing(data: Uint8Array): number | null {
   if (data.length !== 9 || data[0] !== MSG_PING) return null;
   return new DataView(data.buffer, data.byteOffset).getFloat64(1, true);
+}
+
+/** Pede ao servidor para usar o perfil de índice `index` (ver profiles.ts). */
+export function encodeProfile(index: number): Uint8Array<ArrayBuffer> {
+  return Uint8Array.of(MSG_PROFILE, index);
+}
+
+/** Índice do perfil que o servidor informa estar ativo, ou null se não for esse tipo de mensagem. */
+export function decodeProfile(data: Uint8Array): number | null {
+  return data.length === 2 && data[0] === MSG_PROFILE ? data[1]! : null;
 }

@@ -93,7 +93,7 @@ impl Tradutor {
         match evento {
             Evento::Botao { id, pressionado } => self.botao(id, pressionado),
             Evento::Eixo { id, valor } => self.eixo(id, valor),
-            Evento::Ping => vec![],
+            Evento::Ping | Evento::TrocarPerfil(_) => vec![],
             Evento::SoltarTudo => self.soltar_tudo(),
         }
     }

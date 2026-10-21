@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Axis, Button, encodeAxis, encodeButton, encodePing } from "./protocol";
+import { Axis, Button, decodeProfile, encodeAxis, encodeButton, encodePing, encodeProfile } from "./protocol";
 
 describe("protocol", () => {
   it("codifica botão pressionado e solto", () => {
@@ -31,5 +31,19 @@ describe("protocol", () => {
     expect(msg.length).toBe(9);
     expect(msg[0]).toBe(3);
     expect(new DataView(msg.buffer).getFloat64(1, true)).toBe(1234.5);
+  });
+
+  it("codifica o pedido de perfil", () => {
+    expect([...encodeProfile(2)]).toEqual([4, 2]);
+  });
+
+  it("decodifica o aviso de perfil do servidor", () => {
+    expect(decodeProfile(Uint8Array.of(4, 1))).toBe(1);
+  });
+
+  it("ignora mensagens que não são aviso de perfil", () => {
+    expect(decodeProfile(Uint8Array.of(3, 1))).toBeNull();
+    expect(decodeProfile(Uint8Array.of(4))).toBeNull();
+    expect(decodeProfile(Uint8Array.of(4, 1, 1))).toBeNull();
   });
 });

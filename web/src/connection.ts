@@ -1,4 +1,4 @@
-import { decodePing, encodePing } from "./protocol";
+import { decodePing, decodeProfile, encodePing } from "./protocol";
 
 export type Status = "connecting" | "open" | "reconnecting" | "closed";
 
@@ -7,6 +7,8 @@ export interface Options {
   onStatus: (status: Status) => void;
   onLatency: (ms: number, sentAt: number) => void;
   onPingSent?: (ts: number) => void;
+  /** Índice do perfil ativo no servidor, avisado ao conectar e a cada troca. */
+  onProfile?: (index: number) => void;
   WebSocketImpl?: typeof WebSocket;
   pingEveryMs?: number;
   now?: () => number;
@@ -47,8 +49,14 @@ export function connect(opts: Options): Connection {
       }, pingEvery);
     };
     ws.onmessage = (e) => {
-      const sentAt = decodePing(new Uint8Array(e.data as ArrayBuffer));
-      if (sentAt !== null) opts.onLatency(Math.round(now() - sentAt), sentAt);
+      const data = new Uint8Array(e.data as ArrayBuffer);
+      const sentAt = decodePing(data);
+      if (sentAt !== null) {
+        opts.onLatency(Math.round(now() - sentAt), sentAt);
+        return;
+      }
+      const profile = decodeProfile(data);
+      if (profile !== null) opts.onProfile?.(profile);
     };
     ws.onclose = () => {
       if (ws !== socket) return;
