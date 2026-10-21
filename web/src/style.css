@@ -157,3 +157,28 @@ button[data-pressed] {
 @media (orientation: portrait) {
   .rotate { display: grid; }
 }
+
+.status {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(20px, env(safe-area-inset-right));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  pointer-events: none;
+}
+.status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+.status[data-status="open"]::before { background: var(--a); box-shadow: 0 0 8px var(--a); }
+.status[data-status="reconnecting"]::before,
+.status[data-status="connecting"]::before { background: var(--y); animation: pulse 1s ease-in-out infinite; }
+.status[data-status="closed"]::before { background: var(--b); }
+@keyframes pulse { 50% { opacity: 0.3; } }

@@ -13,11 +13,11 @@ const MSG_PING = 3;
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
-export function encodeButton(id: Button, down: boolean): Uint8Array {
+export function encodeButton(id: Button, down: boolean): Uint8Array<ArrayBuffer> {
   return Uint8Array.of(MSG_BUTTON, id, down ? 1 : 0);
 }
 
-export function encodeAxis(id: Axis, value: number): Uint8Array {
+export function encodeAxis(id: Axis, value: number): Uint8Array<ArrayBuffer> {
   const trigger = id === Axis.LT || id === Axis.RT;
   const v = Math.round(trigger ? clamp(value, 0, 255) : clamp(value, -32768, 32767));
   const out = new Uint8Array(4);
@@ -27,7 +27,7 @@ export function encodeAxis(id: Axis, value: number): Uint8Array {
   return out;
 }
 
-export function encodePing(timestamp: number): Uint8Array {
+export function encodePing(timestamp: number): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(9);
   out[0] = MSG_PING;
   new DataView(out.buffer).setFloat64(1, timestamp, true);

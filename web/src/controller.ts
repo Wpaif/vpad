@@ -1,7 +1,7 @@
 import { Axis, Button, encodeAxis, encodeButton } from "./protocol";
 import { stickFromOffset } from "./stick";
 
-type Send = (msg: Uint8Array) => void;
+type Send = (msg: Uint8Array<ArrayBuffer>) => void;
 
 const DEADZONE = 0.12;
 
