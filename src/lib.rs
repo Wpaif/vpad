@@ -234,7 +234,7 @@ async fn pedir_teclado(
     ativacao: &mut Option<tokio::task::JoinHandle<()>>,
 ) -> Result<(), axum::Error> {
     let acesso = &estado.acesso;
-    let Some(aparelho) = acesso.dispositivos().identificar(token) else { return Ok(()) };
+    let Some(aparelho) = acesso.dispositivos().identificar(token, crate::dispositivos::agora()) else { return Ok(()) };
     if !aparelho.teclado {
         return enviar(ws, codificar_aviso_de_perfil(AvisoDePerfil::SemPermissao)).await;
     }
@@ -272,7 +272,7 @@ async fn pedir_teclado(
 
 async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, origem: Option<IpAddr>) {
     let token = parametros.t.unwrap_or_default();
-    if !estado.acesso.autorizado(&token) {
+    if !estado.acesso.autorizado(&token, crate::dispositivos::agora()) {
         return recusar(&mut ws).await;
     }
     let saida = estado.saida.clone();
@@ -296,7 +296,7 @@ async fn conexao(mut ws: WebSocket, estado: Estado, parametros: ParametrosWs, or
                     let Some(Ok(msg)) = msg else { break };
                     limite = Instant::now() + inatividade;
                     // aparelho revogado enquanto conectado: corta na hora
-                    let Some(permissoes) = acesso.permissoes(&token) else {
+                    let Some(permissoes) = acesso.permissoes(&token, crate::dispositivos::agora()) else {
                         recusar(&mut ws).await;
                         break;
                     };

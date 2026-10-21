@@ -53,13 +53,13 @@ async fn servidor_completo(inatividade: Duration, prazo_da_aprovacao: Duration) 
 
 /// Pareia um aparelho novo e devolve (id, token).
 fn parear(s: &Servidor, nome: &str) -> (String, String) {
-    let p = s.acesso.dispositivos().parear(nome, 0).unwrap();
+    let p = s.acesso.dispositivos().parear(nome, vpad::dispositivos::agora()).unwrap();
     (p.id, p.token)
 }
 
 /// Pareia um aparelho que o dono do PC já autorizou a usar o modo teclado.
 fn parear_teclado(s: &Servidor, nome: &str) -> (String, String) {
-    let p = s.acesso.dispositivos().parear_com(nome, 0, true).unwrap();
+    let p = s.acesso.dispositivos().parear_com(nome, vpad::dispositivos::agora(), true).unwrap();
     (p.id, p.token)
 }
 

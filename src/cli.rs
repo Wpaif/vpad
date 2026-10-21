@@ -44,10 +44,21 @@ pub fn tabela_de_dispositivos(lista: &[Registro]) -> String {
             .to_string();
     }
     let largura = lista.iter().map(|d| d.nome.chars().count()).max().unwrap_or(0).max(4);
-    let mut linhas = vec![format!("{:<8}  {:<largura$}  {:<16}  TECLADO", "ID", "NOME", "PAREADO EM (UTC)")];
+    let mut linhas = vec![format!(
+        "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  TECLADO",
+        "ID", "NOME", "PAREADO EM (UTC)", "VALIDO ATE (UTC)", "VISTO POR ULTIMO (UTC)"
+    )];
     for d in lista {
         let teclado = if d.teclado { "sim" } else { "não" };
-        linhas.push(format!("{:<8}  {:<largura$}  {:<16}  {teclado}", d.id, d.nome, data_utc(d.criado)));
+        let visto = d.ultimo_visto.map_or_else(|| "nunca".to_string(), data_utc);
+        linhas.push(format!(
+            "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  {teclado}",
+            d.id,
+            d.nome,
+            data_utc(d.criado),
+            data_utc(d.expira),
+            visto
+        ));
     }
     linhas.join("\n")
 }
@@ -88,8 +99,8 @@ mod testes {
     #[test]
     fn tabela_de_dispositivos_lista_id_nome_e_data() {
         let lista = vec![
-            Registro { id: "ab12cd34".into(), nome: "iPhone do Wilian".into(), criado: 1_700_000_000, teclado: true },
-            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false },
+            Registro { id: "ab12cd34".into(), nome: "iPhone do Wilian".into(), criado: 1_700_000_000, teclado: true, expira: 1_700_000_000 + 90 * 86_400, ultimo_visto: Some(1_700_000_500) },
+            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false, expira: 90 * 86_400, ultimo_visto: None },
         ];
         let t = tabela_de_dispositivos(&lista);
         assert!(t.contains("ab12cd34") && t.contains("iPhone do Wilian") && t.contains("2023-11-14 22:13"), "{t}");
@@ -100,8 +111,8 @@ mod testes {
     #[test]
     fn a_tabela_mostra_quem_pode_usar_o_modo_teclado() {
         let lista = vec![
-            Registro { id: "ab12cd34".into(), nome: "iPhone".into(), criado: 0, teclado: true },
-            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false },
+            Registro { id: "ab12cd34".into(), nome: "iPhone".into(), criado: 0, teclado: true, expira: 90 * 86_400, ultimo_visto: None },
+            Registro { id: "ef56ab78".into(), nome: "iPad".into(), criado: 0, teclado: false, expira: 90 * 86_400, ultimo_visto: None },
         ];
         let t = tabela_de_dispositivos(&lista);
         assert!(t.lines().next().unwrap().contains("TECLADO"), "{t}");
@@ -115,5 +126,23 @@ mod testes {
         let t = tabela_de_dispositivos(&[]);
         assert!(t.to_lowercase().contains("nenhum"), "{t}");
         assert!(t.contains("código"), "{t}");
+    }
+
+    #[test]
+    fn a_tabela_mostra_a_validade_e_o_ultimo_uso_de_cada_token() {
+        let lista = vec![Registro {
+            id: "ab12cd34".into(),
+            nome: "iPhone".into(),
+            criado: 1_700_000_000,
+            teclado: false,
+            expira: 1_700_000_000 + 90 * 86_400,
+            ultimo_visto: Some(1_700_000_500),
+        }];
+        let t = tabela_de_dispositivos(&lista);
+        let cabecalho = t.lines().next().unwrap();
+        assert!(cabecalho.contains("VALIDO ATE"), "{t}");
+        assert!(cabecalho.contains("VISTO POR ULTIMO"), "{t}");
+        assert!(t.contains(&data_utc(1_700_000_000 + 90 * 86_400)), "{t}");
+        assert!(t.contains(&data_utc(1_700_000_500)), "{t}");
     }
 }

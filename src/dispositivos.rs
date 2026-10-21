@@ -17,6 +17,11 @@ use crate::pareamento::iguais;
 
 const NOME_PADRAO: &str = "dispositivo";
 const NOME_MAXIMO: usize = 40;
+/// Quanto tempo um token vale depois de o aparelho ser pareado (90 dias).
+pub const VALIDADE_DO_TOKEN: u64 = 90 * 86_400;
+/// O "visto por último" é gravado no disco no máximo uma vez por minuto, para não escrever
+/// o arquivo a cada mensagem do WebSocket.
+const INTERVALO_DO_ULTIMO_VISTO: u64 = 60;
 
 /// O que um aparelho pareado pode fazer além de controlar jogos.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +39,10 @@ pub struct Registro {
     pub criado: u64,
     /// o aparelho pode usar o modo teclado (que digita no PC)
     pub teclado: bool,
+    /// segundos desde 1970 em que o token deixa de valer
+    pub expira: u64,
+    /// último instante em que o token foi usado, se alguma vez foi
+    pub ultimo_visto: Option<u64>,
 }
 
 /// Resultado de um pareamento: o token só existe aqui e no celular.
@@ -51,6 +60,13 @@ struct Guardado {
     /// arquivos das versões anteriores não têm o campo: valem como "sem permissão"
     #[serde(default)]
     teclado: bool,
+    /// ausente nos arquivos antigos; `migrar` preenche a partir de `criado`
+    #[serde(default)]
+    expira: Option<u64>,
+    /// não vai para o cadastro principal (que o `--revogar` reescreve): fica num arquivo à
+    /// parte, para anotar o último uso sem nunca ressuscitar um aparelho revogado
+    #[serde(default, skip_serializing)]
+    visto: Option<u64>,
 }
 
 pub struct Dispositivos {
@@ -77,13 +93,65 @@ pub(crate) fn hash_do_token(token: &str) -> String {
     Sha256::digest(token.as_bytes()).iter().map(|x| format!("{x:02x}")).collect()
 }
 
+/// Agora, em segundos desde 1970.
+pub fn agora() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Preenche a validade dos cadastros antigos, que não tinham o campo: a contagem começa na
+/// data em que o aparelho foi pareado.
+fn migrar(mut lista: Vec<Guardado>) -> Vec<Guardado> {
+    for g in &mut lista {
+        if g.expira.is_none() {
+            g.expira = Some(g.criado.saturating_add(VALIDADE_DO_TOKEN));
+        }
+    }
+    lista
+}
+
+fn expira_de(g: &Guardado) -> u64 {
+    g.expira.unwrap_or_else(|| g.criado.saturating_add(VALIDADE_DO_TOKEN))
+}
+
 /// Lê o cadastro; arquivo inexistente é um cadastro vazio.
 fn ler(arquivo: &Path) -> Result<Vec<Guardado>, String> {
     match fs::read_to_string(arquivo) {
-        Ok(texto) => serde_json::from_str(&texto).map_err(|e| e.to_string()),
+        Ok(texto) => serde_json::from_str(&texto).map(migrar).map_err(|e| e.to_string()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(vec![]),
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// O "visto por último" fica num arquivo à parte para que anotá-lo nunca reescreva o
+/// cadastro (e não possa desfazer uma revogação feita por outro processo).
+fn caminho_dos_vistos(arquivo: &Path) -> PathBuf {
+    arquivo.with_extension("vistos.json")
+}
+
+fn ler_vistos(arquivo: &Path) -> std::collections::HashMap<String, u64> {
+    fs::read_to_string(caminho_dos_vistos(arquivo))
+        .ok()
+        .and_then(|texto| serde_json::from_str(&texto).ok())
+        .unwrap_or_default()
+}
+
+fn gravar_vistos(arquivo: &Path, lista: &[Guardado]) -> io::Result<()> {
+    let vistos: std::collections::BTreeMap<&str, u64> =
+        lista.iter().filter_map(|g| g.visto.map(|v| (g.id.as_str(), v))).collect();
+    let destino = caminho_dos_vistos(arquivo);
+    if vistos.is_empty() {
+        let _ = fs::remove_file(destino);
+        return Ok(());
+    }
+    let temporario = destino.with_extension("tmp");
+    let mut f = fs::File::create(&temporario)?;
+    f.set_permissions(fs::Permissions::from_mode(0o600))?;
+    f.write_all(serde_json::to_string(&vistos).map_err(io::Error::other)?.as_bytes())?;
+    drop(f);
+    fs::rename(&temporario, destino)
 }
 
 /// Nome sem caracteres de controle (que poderiam mexer no terminal), com até 40 caracteres.
@@ -101,19 +169,38 @@ impl Dispositivos {
 
     /// Carrega o arquivo; se não existir ou estiver inválido, começa vazio (ninguém pareado).
     pub fn com_arquivo(arquivo: PathBuf) -> Self {
-        let lista = ler(&arquivo).unwrap_or_else(|e| {
+        let mut lista = ler(&arquivo).unwrap_or_else(|e| {
             eprintln!("ignorando {}: {e}", arquivo.display());
             vec![]
         });
+        let vistos = ler_vistos(&arquivo);
+        for g in &mut lista {
+            if let Some(&visto) = vistos.get(&g.id) {
+                g.visto = Some(visto);
+            }
+        }
         Self { arquivo: Some(arquivo), lista: Mutex::new(lista) }
     }
 
     /// Relê o arquivo, que outro processo (o comando `--revogar`) pode ter mudado. Se o
-    /// arquivo estiver ilegível naquele instante, mantém o que já se sabia.
+    /// arquivo estiver ilegível naquele instante, mantém o que já se sabia. O "visto por
+    /// último" mais recente (em memória ou no disco) é preservado.
     pub fn recarregar(&self) {
         let Some(arquivo) = &self.arquivo else { return };
-        if let Ok(lista) = ler(arquivo) {
-            *self.lista.lock().unwrap() = lista;
+        if let Ok(mut lista) = ler(arquivo) {
+            let vistos = ler_vistos(arquivo);
+            let mut atual = self.lista.lock().unwrap();
+            for g in &mut lista {
+                if let Some(&visto) = vistos.get(&g.id) {
+                    g.visto = Some(visto);
+                }
+                if let Some(visto) = atual.iter().find(|a| a.id == g.id).and_then(|a| a.visto) {
+                    if g.visto.is_none_or(|gravado| visto > gravado) {
+                        g.visto = Some(visto);
+                    }
+                }
+            }
+            *atual = lista;
         }
     }
 
@@ -128,7 +215,15 @@ impl Dispositivos {
         self.recarregar(); // não desfazer o que outro processo acabou de revogar
         let token = gerar_token()?;
         let id = gerar_id()?;
-        let novo = Guardado { id: id.clone(), nome: limpar_nome(nome), hash: hash_do_token(&token), criado: agora, teclado };
+        let novo = Guardado {
+            id: id.clone(),
+            nome: limpar_nome(nome),
+            hash: hash_do_token(&token),
+            criado: agora,
+            teclado,
+            expira: Some(agora.saturating_add(VALIDADE_DO_TOKEN)),
+            visto: None,
+        };
 
         let mut lista = self.lista.lock().unwrap();
         let mut proxima = lista.clone();
@@ -138,38 +233,66 @@ impl Dispositivos {
         Ok(Pareado { id, token })
     }
 
-    /// O token pertence a algum aparelho pareado? Compara os hashes em tempo constante.
-    pub fn autorizado(&self, token: &str) -> bool {
-        let candidato = hash_do_token(token);
-        let lista = self.lista.lock().unwrap();
-        // percorre todos, sem parar no primeiro, para o tempo não revelar a posição
-        lista.iter().fold(false, |achou, g| iguais(&g.hash, &candidato) | achou)
+    /// O token pertence a algum aparelho pareado e ainda não venceu? Compara os hashes em
+    /// tempo constante e registra o "visto por último".
+    pub fn autorizado(&self, token: &str, agora: u64) -> bool {
+        self.encontrar(token, agora).is_some()
     }
 
-    /// Uma consulta só: o token é de um aparelho pareado? Se for, quais as permissões dele.
-    pub fn consultar(&self, token: &str) -> Option<Permissoes> {
-        self.identificar(token).map(|r| Permissoes { teclado: r.teclado })
+    /// Uma consulta só: o token é de um aparelho pareado (e válido)? Se for, quais as
+    /// permissões dele.
+    pub fn consultar(&self, token: &str, agora: u64) -> Option<Permissoes> {
+        self.encontrar(token, agora).map(|r| Permissoes { teclado: r.teclado })
     }
 
-    /// O aparelho dono deste token (id, nome, permissões), se for de um aparelho pareado.
-    pub fn identificar(&self, token: &str) -> Option<Registro> {
+    /// O aparelho dono deste token (id, nome, permissões, validade e último uso), se o token
+    /// for de um aparelho pareado e ainda não tiver vencido.
+    pub fn identificar(&self, token: &str, agora: u64) -> Option<Registro> {
+        self.encontrar(token, agora)
+    }
+
+    /// O aparelho dono deste token pode usar o modo teclado? Token desconhecido ou vencido: não.
+    pub fn teclado_permitido(&self, token: &str, agora: u64) -> bool {
+        self.encontrar(token, agora).is_some_and(|r| r.teclado)
+    }
+
+    /// Procura o token em toda a lista (sem parar no primeiro, para o tempo não revelar a
+    /// posição) e devolve o registro se ele ainda não venceu. Aproveita para anotar o
+    /// "visto por último", gravando no disco no máximo uma vez por minuto.
+    fn encontrar(&self, token: &str, agora: u64) -> Option<Registro> {
         let candidato = hash_do_token(token);
-        let lista = self.lista.lock().unwrap();
-        // percorre todos, sem parar no primeiro, para o tempo não revelar a posição
-        lista.iter().fold(None, |achado, g| {
-            if iguais(&g.hash, &candidato) {
-                Some(Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado, teclado: g.teclado })
-            } else {
-                achado
+        let mut lista = self.lista.lock().unwrap();
+        let mut achado = None;
+        let mut anotou = false;
+        for g in lista.iter_mut() {
+            if !iguais(&g.hash, &candidato) {
+                continue;
             }
-        })
-    }
-
-    /// O aparelho dono deste token pode usar o modo teclado? Token desconhecido: não.
-    pub fn teclado_permitido(&self, token: &str) -> bool {
-        let candidato = hash_do_token(token);
-        let lista = self.lista.lock().unwrap();
-        lista.iter().fold(false, |permitido, g| permitido | (iguais(&g.hash, &candidato) & g.teclado))
+            let expira = expira_de(g);
+            if agora >= expira {
+                continue;
+            }
+            if g.visto.is_none_or(|visto| agora.saturating_sub(visto) >= INTERVALO_DO_ULTIMO_VISTO) {
+                g.visto = Some(agora);
+                anotou = true;
+            }
+            achado = Some(Registro {
+                id: g.id.clone(),
+                nome: g.nome.clone(),
+                criado: g.criado,
+                teclado: g.teclado,
+                expira,
+                ultimo_visto: g.visto,
+            });
+        }
+        let para_gravar = anotou.then(|| lista.clone());
+        drop(lista);
+        if let Some(lista) = para_gravar {
+            if let Some(arquivo) = &self.arquivo {
+                let _ = gravar_vistos(arquivo, &lista);
+            }
+        }
+        achado
     }
 
     /// Libera ou tira o modo teclado do aparelho `id`. Devolve false se o id não existe.
@@ -188,7 +311,14 @@ impl Dispositivos {
         let lista = self.lista.lock().unwrap();
         lista
             .iter()
-            .map(|g| Registro { id: g.id.clone(), nome: g.nome.clone(), criado: g.criado, teclado: g.teclado })
+            .map(|g| Registro {
+                id: g.id.clone(),
+                nome: g.nome.clone(),
+                criado: g.criado,
+                teclado: g.teclado,
+                expira: expira_de(g),
+                ultimo_visto: g.visto,
+            })
             .collect()
     }
 
@@ -256,6 +386,9 @@ mod testes {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
+    /// Instante fixo usado pelas consultas: basta caber na validade dos tokens de teste.
+    const AGORA: u64 = 10_000;
+
     struct Pasta(PathBuf);
     impl Pasta {
         fn nova(nome: &str) -> Pasta {
@@ -291,7 +424,7 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear("iPhone", 1000).unwrap();
         assert!(hex(&p.token, 32) && hex(&p.id, 8));
-        assert!(d.autorizado(&p.token));
+        assert!(d.autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -299,9 +432,9 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear("iPhone", 1000).unwrap();
         for ruim in ["", "errado", &p.token[..31], &format!("{}0", p.token), &p.token.to_uppercase()] {
-            assert!(!d.autorizado(ruim), "{ruim:?}");
+            assert!(!d.autorizado(ruim, AGORA), "{ruim:?}");
         }
-        assert!(!Dispositivos::em_memoria().autorizado(&p.token), "sem ninguém pareado nada vale");
+        assert!(!Dispositivos::em_memoria().autorizado(&p.token, AGORA), "sem ninguém pareado nada vale");
     }
 
     #[test]
@@ -311,7 +444,7 @@ mod testes {
         let b = d.parear("iPad", 1001).unwrap();
         assert_ne!(a.token, b.token);
         assert_ne!(a.id, b.id);
-        assert!(d.autorizado(&a.token) && d.autorizado(&b.token));
+        assert!(d.autorizado(&a.token, AGORA) && d.autorizado(&b.token, AGORA));
     }
 
     #[test]
@@ -320,8 +453,8 @@ mod testes {
         let a = d.parear("iPhone", 1000).unwrap();
         let b = d.parear("iPad", 1001).unwrap();
         assert!(d.revogar(&a.id).unwrap());
-        assert!(!d.autorizado(&a.token));
-        assert!(d.autorizado(&b.token));
+        assert!(!d.autorizado(&a.token, AGORA));
+        assert!(d.autorizado(&b.token, AGORA));
         assert!(!d.revogar(&a.id).unwrap(), "já revogado");
         assert!(!d.revogar("naoexiste").unwrap());
     }
@@ -331,7 +464,7 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let tokens: Vec<_> = (0..3).map(|i| d.parear("x", i).unwrap().token).collect();
         assert_eq!(d.revogar_todos().unwrap(), 3);
-        assert!(tokens.iter().all(|t| !d.autorizado(t)));
+        assert!(tokens.iter().all(|t| !d.autorizado(t, AGORA)));
         assert!(d.listar().is_empty());
     }
 
@@ -373,7 +506,7 @@ mod testes {
         assert_eq!(modo, 0o600);
 
         let recarregado = Dispositivos::com_arquivo(pasta.arquivo());
-        assert!(recarregado.autorizado(&p.token), "o aparelho continua pareado depois de reiniciar");
+        assert!(recarregado.autorizado(&p.token, AGORA), "o aparelho continua pareado depois de reiniciar");
         assert_eq!(recarregado.listar().len(), 1);
     }
 
@@ -383,7 +516,7 @@ mod testes {
         let d = Dispositivos::com_arquivo(pasta.arquivo());
         let p = d.parear("iPhone", 1000).unwrap();
         d.revogar(&p.id).unwrap();
-        assert!(!Dispositivos::com_arquivo(pasta.arquivo()).autorizado(&p.token));
+        assert!(!Dispositivos::com_arquivo(pasta.arquivo()).autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -393,7 +526,7 @@ mod testes {
         fs::write(pasta.arquivo(), "isto nao e json").unwrap();
         let d = Dispositivos::com_arquivo(pasta.arquivo());
         assert!(d.listar().is_empty());
-        assert!(!d.autorizado("qualquer"));
+        assert!(!d.autorizado("qualquer", AGORA));
     }
 
     #[test]
@@ -429,9 +562,9 @@ mod testes {
         let comando = Dispositivos::com_arquivo(pasta.arquivo());
         assert!(comando.revogar(&p.id).unwrap());
 
-        assert!(servidor.autorizado(&p.token), "ainda não leu o arquivo");
+        assert!(servidor.autorizado(&p.token, AGORA), "ainda não leu o arquivo");
         servidor.recarregar();
-        assert!(!servidor.autorizado(&p.token));
+        assert!(!servidor.autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -441,7 +574,7 @@ mod testes {
         let outro = Dispositivos::com_arquivo(pasta.arquivo());
         let p = outro.parear("iPad", 1000).unwrap();
         servidor.recarregar();
-        assert!(servidor.autorizado(&p.token));
+        assert!(servidor.autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -455,8 +588,8 @@ mod testes {
         // o servidor ainda não recarregou, mas ao gravar um aparelho novo não pode trazer o velho de volta
         let novo = servidor.parear("iPad", 1001).unwrap();
         let depois = Dispositivos::com_arquivo(pasta.arquivo());
-        assert!(!depois.autorizado(&velho.token));
-        assert!(depois.autorizado(&novo.token));
+        assert!(!depois.autorizado(&velho.token, AGORA));
+        assert!(depois.autorizado(&novo.token, AGORA));
     }
 
     #[test]
@@ -466,7 +599,7 @@ mod testes {
         let p = d.parear("iPhone", 1000).unwrap();
         d.recarregar();
         d.recarregar();
-        assert!(d.autorizado(&p.token));
+        assert!(d.autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -474,7 +607,7 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear("iPhone", 1000).unwrap();
         d.recarregar();
-        assert!(d.autorizado(&p.token));
+        assert!(d.autorizado(&p.token, AGORA));
     }
 
     #[test]
@@ -484,7 +617,7 @@ mod testes {
         let p = d.parear("iPhone", 1000).unwrap();
         fs::remove_file(pasta.arquivo()).unwrap();
         d.recarregar();
-        assert!(!d.autorizado(&p.token));
+        assert!(!d.autorizado(&p.token, AGORA));
     }
 
     // ---------- permissão do modo teclado, por aparelho ----------
@@ -493,7 +626,7 @@ mod testes {
     fn aparelho_novo_nasce_sem_permissao_de_teclado() {
         let d = Dispositivos::em_memoria();
         let p = d.parear("iPhone", 1000).unwrap();
-        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.teclado_permitido(&p.token, AGORA));
         assert!(!d.listar()[0].teclado);
     }
 
@@ -501,7 +634,7 @@ mod testes {
     fn pode_nascer_com_a_permissao_se_o_dono_do_pc_aprovou_assim() {
         let d = Dispositivos::em_memoria();
         let p = d.parear_com("iPhone", 1000, true).unwrap();
-        assert!(d.teclado_permitido(&p.token));
+        assert!(d.teclado_permitido(&p.token, AGORA));
         assert!(d.listar()[0].teclado);
     }
 
@@ -510,8 +643,8 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let a = d.parear_com("iPhone", 1000, true).unwrap();
         let b = d.parear("iPad", 1001).unwrap();
-        assert!(d.teclado_permitido(&a.token));
-        assert!(!d.teclado_permitido(&b.token));
+        assert!(d.teclado_permitido(&a.token, AGORA));
+        assert!(!d.teclado_permitido(&b.token, AGORA));
     }
 
     #[test]
@@ -519,7 +652,7 @@ mod testes {
         let d = Dispositivos::em_memoria();
         d.parear_com("iPhone", 1000, true).unwrap();
         for ruim in ["", "errado", "0123456789abcdef0123456789abcdef"] {
-            assert!(!d.teclado_permitido(ruim), "{ruim:?}");
+            assert!(!d.teclado_permitido(ruim, AGORA), "{ruim:?}");
         }
     }
 
@@ -528,9 +661,9 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear("iPhone", 1000).unwrap();
         assert!(d.definir_teclado(&p.id, true).unwrap());
-        assert!(d.teclado_permitido(&p.token));
+        assert!(d.teclado_permitido(&p.token, AGORA));
         assert!(d.definir_teclado(&p.id, false).unwrap());
-        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.teclado_permitido(&p.token, AGORA));
         assert!(!d.definir_teclado("naoexiste", true).unwrap(), "id desconhecido");
     }
 
@@ -539,7 +672,7 @@ mod testes {
         let pasta = Pasta::nova("perm-teclado");
         let d = Dispositivos::com_arquivo(pasta.arquivo());
         let p = d.parear_com("iPhone", 1000, true).unwrap();
-        assert!(Dispositivos::com_arquivo(pasta.arquivo()).teclado_permitido(&p.token));
+        assert!(Dispositivos::com_arquivo(pasta.arquivo()).teclado_permitido(&p.token, AGORA));
 
         // arquivo das versões anteriores: sem o campo `teclado`
         let antigo = Pasta::nova("perm-antigo");
@@ -551,8 +684,8 @@ mod testes {
         )
         .unwrap();
         let d = Dispositivos::com_arquivo(antigo.arquivo());
-        assert!(d.autorizado(token), "continua pareado");
-        assert!(!d.teclado_permitido(token), "mas sem teclado até o dono do PC liberar");
+        assert!(d.autorizado(token, AGORA), "continua pareado");
+        assert!(!d.teclado_permitido(token, AGORA), "mas sem teclado até o dono do PC liberar");
     }
 
     #[test]
@@ -563,9 +696,9 @@ mod testes {
 
         Dispositivos::com_arquivo(pasta.arquivo()).definir_teclado(&p.id, false).unwrap();
 
-        assert!(servidor.teclado_permitido(&p.token), "ainda não leu o arquivo");
+        assert!(servidor.teclado_permitido(&p.token, AGORA), "ainda não leu o arquivo");
         servidor.recarregar();
-        assert!(!servidor.teclado_permitido(&p.token));
+        assert!(!servidor.teclado_permitido(&p.token, AGORA));
     }
 
     #[test]
@@ -573,7 +706,7 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear_com("iPhone", 1000, true).unwrap();
         d.revogar(&p.id).unwrap();
-        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.teclado_permitido(&p.token, AGORA));
     }
 
     #[test]
@@ -585,7 +718,7 @@ mod testes {
         fs::remove_dir_all(pasta.arquivo().parent().unwrap()).unwrap();
         fs::write(pasta.arquivo().parent().unwrap(), "x").unwrap();
         assert!(d.definir_teclado(&p.id, true).is_err());
-        assert!(!d.teclado_permitido(&p.token));
+        assert!(!d.teclado_permitido(&p.token, AGORA));
     }
 
     // ---------- consulta única (autorizado + permissões) ----------
@@ -595,10 +728,10 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let sem = d.parear("iPad", 1000).unwrap();
         let com = d.parear_com("iPhone", 1001, true).unwrap();
-        assert_eq!(d.consultar(&sem.token), Some(Permissoes { teclado: false }));
-        assert_eq!(d.consultar(&com.token), Some(Permissoes { teclado: true }));
-        assert_eq!(d.consultar("errado"), None);
-        assert_eq!(d.consultar(""), None);
+        assert_eq!(d.consultar(&sem.token, AGORA), Some(Permissoes { teclado: false }));
+        assert_eq!(d.consultar(&com.token, AGORA), Some(Permissoes { teclado: true }));
+        assert_eq!(d.consultar("errado", AGORA), None);
+        assert_eq!(d.consultar("", AGORA), None);
     }
 
     #[test]
@@ -606,17 +739,70 @@ mod testes {
         let d = Dispositivos::em_memoria();
         let p = d.parear_com("iPhone", 1000, true).unwrap();
         d.definir_teclado(&p.id, false).unwrap();
-        assert_eq!(d.consultar(&p.token), Some(Permissoes { teclado: false }));
+        assert_eq!(d.consultar(&p.token, AGORA), Some(Permissoes { teclado: false }));
         d.revogar(&p.id).unwrap();
-        assert_eq!(d.consultar(&p.token), None);
+        assert_eq!(d.consultar(&p.token, AGORA), None);
     }
 
     #[test]
     fn identificar_devolve_id_e_nome_so_para_tokens_pareados() {
         let d = Dispositivos::em_memoria();
         let p = d.parear_com("iPhone do Wilian", 1000, true).unwrap();
-        let r = d.identificar(&p.token).unwrap();
+        let r = d.identificar(&p.token, AGORA).unwrap();
         assert_eq!((r.id.as_str(), r.nome.as_str(), r.teclado), (p.id.as_str(), "iPhone do Wilian", true));
-        assert!(d.identificar("errado").is_none());
+        assert!(d.identificar("errado", AGORA).is_none());
+    }
+
+    // ---------- validade e visto por último ----------
+
+    #[test]
+    fn o_token_vale_ate_a_validade_e_depois_nao_vale_mais() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear("iPhone", 1000).unwrap();
+        let fim = 1000 + VALIDADE_DO_TOKEN;
+        assert!(d.autorizado(&p.token, fim - 1));
+        assert!(!d.autorizado(&p.token, fim));
+        assert!(d.consultar(&p.token, fim).is_none());
+        assert!(d.identificar(&p.token, fim).is_none());
+        assert!(!d.teclado_permitido(&p.token, fim));
+    }
+
+    #[test]
+    fn identificar_registra_quando_o_aparelho_foi_visto_por_ultimo() {
+        let d = Dispositivos::em_memoria();
+        let p = d.parear("iPhone", 1000).unwrap();
+        assert_eq!(d.listar()[0].ultimo_visto, None);
+        assert_eq!(d.identificar(&p.token, 5000).unwrap().ultimo_visto, Some(5000));
+        assert_eq!(d.listar()[0].ultimo_visto, Some(5000));
+        // uma consulta mais antiga não faz o relógio andar para trás
+        assert_eq!(d.identificar(&p.token, 4000).unwrap().ultimo_visto, Some(5000));
+    }
+
+    #[test]
+    fn o_ultimo_visto_sobrevive_ao_reinicio() {
+        let pasta = Pasta::nova("visto");
+        let d = Dispositivos::com_arquivo(pasta.arquivo());
+        let p = d.parear("iPhone", 1000).unwrap();
+        d.identificar(&p.token, 5000).unwrap();
+        let depois = Dispositivos::com_arquivo(pasta.arquivo());
+        assert_eq!(depois.listar()[0].ultimo_visto, Some(5000));
+    }
+
+    #[test]
+    fn arquivo_das_versoes_anteriores_ganha_validade_a_partir_da_criacao() {
+        let pasta = Pasta::nova("antigo");
+        let d = Dispositivos::com_arquivo(pasta.arquivo());
+        let p = d.parear("iPhone", 1000).unwrap();
+        // formato antigo, sem `expira` nem `visto`
+        let antigo = format!(
+            r#"[{{"id":"{}","nome":"iPhone","hash":"{}","criado":1000}}]"#,
+            p.id,
+            hash_do_token(&p.token)
+        );
+        fs::write(pasta.arquivo(), antigo).unwrap();
+        let carregado = Dispositivos::com_arquivo(pasta.arquivo());
+        assert_eq!(carregado.listar()[0].expira, 1000 + VALIDADE_DO_TOKEN);
+        assert!(carregado.autorizado(&p.token, 1000 + VALIDADE_DO_TOKEN - 1));
+        assert!(!carregado.autorizado(&p.token, 1000 + VALIDADE_DO_TOKEN));
     }
 }
