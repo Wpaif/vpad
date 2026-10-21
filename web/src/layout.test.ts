@@ -40,3 +40,31 @@ describe("editor de teclas", () => {
     expect(document.getElementById("pad")!.contains(editor)).toBe(false);
   });
 });
+
+describe("tela de pareamento no HTML", () => {
+  it("existe, começa escondida e fica fora do controle", () => {
+    const pair = document.getElementById("pair")!;
+    expect(pair.hidden).toBe(true);
+    expect(pair.getAttribute("role")).toBe("dialog");
+    expect(document.getElementById("pad")!.contains(pair)).toBe(false);
+  });
+
+  it("tem um campo numérico de seis dígitos e o botão de parear", () => {
+    const input = document.querySelector<HTMLInputElement>("#pair input")!;
+    expect(input.getAttribute("inputmode")).toBe("numeric");
+    expect(input.getAttribute("maxlength")).toBe("6");
+    expect(input.getAttribute("autocomplete")).toBe("one-time-code");
+    expect(document.querySelector("#pair button[type=submit]")).not.toBeNull();
+    expect(document.querySelector("#pair [role=alert]")).not.toBeNull();
+  });
+
+  it("o antigo bloqueio de 'outro aparelho está controlando' não existe mais", () => {
+    expect(document.getElementById("gate")).toBeNull();
+  });
+});
+
+describe("dica de instalação", () => {
+  it("avisa que o app instalado precisa ser pareado de novo, com o código do terminal", () => {
+    expect(document.getElementById("install-hint")!.textContent).toMatch(/parear|código/i);
+  });
+});

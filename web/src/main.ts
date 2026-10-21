@@ -1,16 +1,27 @@
 import "./style.css";
+import { clearToken, getToken, safeStorage, saveToken, wsUrl } from "./auth";
 import { connect } from "./connection";
 import { bindController } from "./controller";
-import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
 import { mountKeyEditor } from "./editor";
+import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
 import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
 import { applyKeyboardLabels, applyProfileLabels } from "./labels";
 import { createLatencyMeter } from "./latency";
+import { deviceName, mountPairing, pairDevice } from "./pairing";
 import { mountProfilePicker } from "./picker";
 import { PROFILES } from "./profiles";
 import { encodeProfile } from "./protocol";
+import {
+  bindPanelToggle,
+  bindVisibilityToggle,
+  lockGestures,
+  renderStats,
+  renderStatus,
+} from "./ui";
 import { bindAppHeight, showViewportDebug } from "./viewport";
-import { bindPanelToggle, bindVisibilityToggle, lockGestures, renderStats, renderStatus } from "./ui";
+
+const storage = safeStorage();
+const pad = document.getElementById("pad")!;
 
 lockGestures();
 enterFullscreenOnTouch(document);
@@ -24,78 +35,101 @@ bindInstallHint(
   document.getElementById("install-hint")!,
   document.getElementById("install-hint-close")!,
   { standalone, fullscreenEnabled: document.fullscreenEnabled === true },
-  localStorage,
+  storage,
 );
 
-const now = () => performance.timeOrigin + performance.now();
-const pad = document.getElementById("pad")!;
-const statusEl = document.getElementById("status")!;
-const statsEl = document.getElementById("stats")!;
-bindVisibilityToggle(document.getElementById("toggle")!, pad);
-
-// Rótulos dos botões: os do perfil ativo ou, no modo teclado, as teclas do mapa.
-let profileId: string | null = null;
-let keyboard: KeyboardConfig | null = null;
-
-function refreshLabels() {
-  if (profileId === null) return;
-  if (profileId !== "teclado") {
-    applyProfileLabels(pad, profileId);
-  } else if (keyboard) {
-    applyKeyboardLabels(pad, keyboard.mapa, keyboard.teclas);
-  } else {
-    loadKeyboard()
-      .then((config) => {
-        keyboard = config;
-        if (profileId === "teclado") refreshLabels();
-      })
-      .catch(() => {});
-  }
-}
-
-const editor = mountKeyEditor(document.getElementById("key-editor")!, {
-  load: () => loadKeyboard(),
-  save: (mapa) => saveKeyboard(mapa),
-  onSaved: (_mapa, config) => {
-    keyboard = config;
-    refreshLabels();
+// Cada aparelho se pareia uma vez, digitando o código que o terminal do PC mostra, e guarda o
+// token que recebe. O app da Tela de Início tem armazenamento próprio: ele pareia por conta própria.
+const pairing = mountPairing(document.getElementById("pair")!, {
+  pair: (code) => pairDevice(code, deviceName(navigator.userAgent, navigator.maxTouchPoints)),
+  onPaired: (token) => {
+    saveToken(storage, token);
+    pairing.hide();
+    start(token);
   },
 });
-document.getElementById("open-key-editor")!.addEventListener("click", () => void editor.open());
 
-const picker = mountProfilePicker(document.getElementById("profile-picker")!, (i) => link.send(encodeProfile(i)));
-const meter = createLatencyMeter({ window: 30, timeoutMs: 2000 });
+const saved = getToken(storage);
+if (saved === null) pairing.show();
+else start(saved);
 
-let refresh: ReturnType<typeof setInterval> | undefined;
-const draw = () => renderStats(statsEl, meter.snapshot(now()));
-bindPanelToggle(statusEl, statsEl, (open) => {
-  clearInterval(refresh);
-  if (open) {
-    draw();
-    refresh = setInterval(draw, 500);
-  }
-});
+function start(token: string) {
+  const now = () => performance.timeOrigin + performance.now();
+  const statusEl = document.getElementById("status")!;
+  const statsEl = document.getElementById("stats")!;
+  bindVisibilityToggle(document.getElementById("toggle")!, pad);
 
-const link = connect({
-  url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`,
-  now,
-  onStatus: (status) => {
-    if (status !== "open") {
-      meter.reset();
-      picker.setCurrent(null);
+  // Rótulos dos botões: os do perfil ativo ou, no modo teclado, as teclas do mapa.
+  let profileId: string | null = null;
+  let keyboard: KeyboardConfig | null = null;
+
+  function refreshLabels() {
+    if (profileId === null) return;
+    if (profileId !== "teclado") {
+      applyProfileLabels(pad, profileId);
+    } else if (keyboard) {
+      applyKeyboardLabels(pad, keyboard.mapa, keyboard.teclas);
+    } else {
+      loadKeyboard(token)
+        .then((config) => {
+          keyboard = config;
+          if (profileId === "teclado") refreshLabels();
+        })
+        .catch(() => {});
     }
-    renderStatus(statusEl, status, null);
-  },
-  onPingSent: (ts) => meter.sent(ts),
-  onProfile: (index) => {
-    picker.setCurrent(index);
-    profileId = PROFILES[index]?.id ?? null;
-    refreshLabels();
-  },
-  onLatency: (_ms, sentAt) => {
-    const ms = meter.received(sentAt, now());
-    if (ms !== null) renderStatus(statusEl, "open", Math.round(ms));
-  },
-});
+  }
 
-bindController(pad, link.send);
+  const editor = mountKeyEditor(document.getElementById("key-editor")!, {
+    load: () => loadKeyboard(token),
+    save: (mapa) => saveKeyboard(mapa, token),
+    onSaved: (_mapa, config) => {
+      keyboard = config;
+      refreshLabels();
+    },
+  });
+  document.getElementById("open-key-editor")!.addEventListener("click", () => void editor.open());
+
+  const picker = mountProfilePicker(document.getElementById("profile-picker")!, (i) =>
+    link.send(encodeProfile(i)),
+  );
+  const meter = createLatencyMeter({ window: 30, timeoutMs: 2000 });
+
+  let refresh: ReturnType<typeof setInterval> | undefined;
+  const draw = () => renderStats(statsEl, meter.snapshot(now()));
+  bindPanelToggle(statusEl, statsEl, (open) => {
+    clearInterval(refresh);
+    if (open) {
+      draw();
+      refresh = setInterval(draw, 500);
+    }
+  });
+
+  const link = connect({
+    url: wsUrl(location, token),
+    now,
+    onStatus: (status) => {
+      if (status !== "open") {
+        meter.reset();
+        picker.setCurrent(null);
+      }
+      renderStatus(statusEl, status, null);
+    },
+    onPingSent: (ts) => meter.sent(ts),
+    onProfile: (index) => {
+      picker.setCurrent(index);
+      profileId = PROFILES[index]?.id ?? null;
+      refreshLabels();
+    },
+    // O servidor não reconhece mais este aparelho (revogado): esquece o token e volta ao pareamento.
+    onRefused: () => {
+      clearToken(storage);
+      location.reload();
+    },
+    onLatency: (_ms, sentAt) => {
+      const ms = meter.received(sentAt, now());
+      if (ms !== null) renderStatus(statusEl, "open", Math.round(ms));
+    },
+  });
+
+  bindController(pad, link.send);
+}

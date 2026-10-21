@@ -58,7 +58,7 @@
   </header>
 
   <aside id="install-hint" class="hint" hidden>
-    <p>Para usar em tela cheia: toque em <b>Compartilhar</b> e depois em <b>Adicionar à Tela de Início</b>, e abra pelo ícone.</p>
+    <p>Para usar em tela cheia: <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>. Abra pelo ícone e <b>pareie de novo</b> com o código do terminal.</p>
     <button id="install-hint-close" aria-label="Dispensar dica">×</button>
   </aside>
 
@@ -82,6 +82,17 @@
   </section>
 
   <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" hidden></div>
+
+  <div id="pair" class="gate" role="dialog" aria-modal="true" aria-label="Parear este aparelho" hidden>
+    <form class="gate-box" autocomplete="off">
+      <h1>Parear este aparelho</h1>
+      <p>Digite o código de 6 dígitos que aparece no terminal do PC. Ele muda a cada 30 segundos.</p>
+      <input name="codigo" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+             autocomplete="one-time-code" placeholder="000000" aria-label="Código de pareamento">
+      <button type="submit" disabled>Parear</button>
+      <p class="pair-error" role="alert"></p>
+    </form>
+  </div>
 
   <div class="rotate" role="alert">Gire o celular para o modo paisagem</div>
 </body>

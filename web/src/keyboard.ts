@@ -20,18 +20,21 @@ type FetchFn = typeof fetch;
 
 const URL = "/api/teclado";
 
-export async function loadKeyboard(fetchFn: FetchFn = fetch): Promise<KeyboardConfig> {
-  const res = await fetchFn(URL);
+const DENIED = "acesso negado: é preciso parear este aparelho de novo";
+
+export async function loadKeyboard(token: string, fetchFn: FetchFn = fetch): Promise<KeyboardConfig> {
+  const res = await fetchFn(URL, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 401) throw new Error(DENIED);
   if (!res.ok) throw new Error(`não consegui carregar as teclas (${res.status})`);
   return (await res.json()) as KeyboardConfig;
 }
 
-export async function saveKeyboard(mapa: KeyMap, fetchFn: FetchFn = fetch): Promise<KeyMap> {
+export async function saveKeyboard(mapa: KeyMap, token: string, fetchFn: FetchFn = fetch): Promise<KeyMap> {
   let res: Response;
   try {
     res = await fetchFn(URL, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ mapa }),
     });
   } catch {

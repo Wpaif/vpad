@@ -379,3 +379,50 @@ button[data-pressed] {
   border-color: var(--accent);
 }
 .editor-body, .picker-keys { scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / 0.3) transparent; }
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.gate[hidden] { display: none; }
+.gate-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; width: min(100%, 420px); text-align: center; }
+.gate-box p { margin: 0; font-size: 16px; line-height: 1.5; }
+.gate-box button { height: 40px; border-radius: 12px; font-size: 14px; }
+.gate-box h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.gate-box input {
+  width: 100%;
+  min-width: 0;
+  height: 56px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: 600 28px/1 ui-monospace, "SF Mono", monospace;
+  letter-spacing: 0.4em;
+  text-align: center;
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: manipulation;
+}
+.gate-box input:focus { outline: 2px solid var(--accent); }
+.gate-box button:disabled { opacity: 0.4; }
+.pair-error { min-height: 20px; color: var(--b); font-size: 14px !important; }
+
+/* O pareamento funciona em qualquer orientação: o aviso para girar não o cobre. */
+body:has(#pair:not([hidden])) .rotate { display: none; }
+
+/* Em tela baixa (celular em paisagem) o teclado numérico cobre a metade de baixo: o campo
+   sobe para o topo e a explicação some, para o código continuar visível enquanto se digita. */
+@media (max-height: 420px) {
+  .gate { align-items: start; padding-top: max(12px, env(safe-area-inset-top)); }
+  .gate-box { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; width: min(100%, 460px); }
+  .gate-box h1, .gate-box .pair-error { grid-column: 1 / -1; }
+  .gate-box p:not(.pair-error) { display: none; }
+  .gate-box input { height: 48px; font-size: 24px; }
+  .gate-box button { height: 48px; padding: 0 20px; }
+}
