@@ -1,5 +1,6 @@
 pub mod dispositivo;
 pub mod mapeamento;
+pub mod perfil;
 pub mod protocolo;
 
 use axum::{

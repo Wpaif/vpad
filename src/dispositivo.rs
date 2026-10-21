@@ -9,47 +9,57 @@ use evdev::{
 };
 
 use crate::{
-    mapeamento::{BOTOES, EIXOS, Tradutor},
+    mapeamento::{EIXOS, Tradutor, eixos_do_perfil, teclas_do_perfil},
+    perfil::{Faixa, Perfil, XBOX_360},
     protocolo::Evento,
 };
-
-const FABRICANTE_MICROSOFT: u16 = 0x045e;
-const PRODUTO_XBOX_360: u16 = 0x028e;
-const VERSAO: u16 = 0x0110;
 
 pub struct Gamepad {
     dispositivo: VirtualDevice,
     tradutor: Tradutor,
 }
 
-impl Gamepad {
-    pub fn novo() -> io::Result<Self> {
-        let mut teclas = AttributeSet::new();
-        BOTOES.iter().for_each(|k| teclas.insert(*k));
+/// Mesmos parâmetros que o driver real do kernel declara, para o jogo calibrar igual.
+fn info_do_eixo(perfil: &Perfil, eixo: Abs, faixa: Faixa) -> AbsInfo {
+    let analogico = EIXOS[..4].contains(&eixo);
+    match (analogico, perfil.id) {
+        (false, _) => AbsInfo::new(0, faixa.min, faixa.max, 0, 0, 0),
+        (true, "ds4") => AbsInfo::new(faixa.centro(), faixa.min, faixa.max, 0, 0, 0),
+        (true, "switch-pro") => AbsInfo::new(0, faixa.min, faixa.max, 250, 500, 0),
+        (true, _) => AbsInfo::new(0, faixa.min, faixa.max, 16, 128, 0),
+    }
+}
 
-        let analogico = AbsInfo::new(0, -32768, 32767, 16, 128, 0);
-        let gatilho = AbsInfo::new(0, 0, 255, 0, 0, 0);
-        let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
+impl Gamepad {
+    pub fn novo(perfil: &'static Perfil) -> io::Result<Self> {
+        let mut teclas = AttributeSet::new();
+        teclas_do_perfil(perfil).into_iter().for_each(|k| teclas.insert(k));
 
         let mut builder = VirtualDevice::builder()?
-            .name("vpad virtual gamepad")
+            .name(perfil.nome)
             .input_id(InputId::new(
                 BusType::BUS_USB,
-                FABRICANTE_MICROSOFT,
-                PRODUTO_XBOX_360,
-                VERSAO,
+                perfil.fabricante,
+                perfil.produto,
+                perfil.versao,
             ))
             .with_keys(&teclas)?;
 
-        for (i, eixo) in EIXOS.iter().enumerate() {
-            let info = if i >= 4 { gatilho } else { analogico };
-            builder = builder.with_absolute_axis(&UinputAbsSetup::new(*eixo, info))?;
+        for (eixo, faixa) in eixos_do_perfil(perfil) {
+            let info = info_do_eixo(perfil, eixo, faixa);
+            builder = builder.with_absolute_axis(&UinputAbsSetup::new(eixo, info))?;
         }
+        let hat = AbsInfo::new(0, -1, 1, 0, 0, 0);
         for eixo in [Abs::ABS_HAT0X, Abs::ABS_HAT0Y] {
             builder = builder.with_absolute_axis(&UinputAbsSetup::new(eixo, hat))?;
         }
 
-        Ok(Self { dispositivo: builder.build()?, tradutor: Tradutor::default() })
+        Ok(Self { dispositivo: builder.build()?, tradutor: Tradutor::new(perfil) })
+    }
+
+    /// Controle Xbox 360, o perfil padrão.
+    pub fn xbox_360() -> io::Result<Self> {
+        Self::novo(&XBOX_360)
     }
 
     /// Caminhos /dev/input/eventN do dispositivo (o udev os cria de forma assíncrona).

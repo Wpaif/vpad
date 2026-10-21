@@ -3,10 +3,18 @@
 use std::time::{Duration, Instant};
 
 use evdev::{AbsoluteAxisCode as Abs, Device, EventType, InputEvent, KeyCode};
-use vpad::{dispositivo::Gamepad, protocolo::Evento};
+use vpad::{
+    dispositivo::Gamepad,
+    perfil::{DUALSHOCK_4, Perfil, SWITCH_PRO, XBOX_360},
+    protocolo::Evento,
+};
 
 fn gamepad() -> Option<Gamepad> {
-    match Gamepad::novo() {
+    gamepad_com(&XBOX_360)
+}
+
+fn gamepad_com(perfil: &'static Perfil) -> Option<Gamepad> {
+    match Gamepad::novo(perfil) {
         Ok(g) => Some(g),
         Err(e) => {
             eprintln!("uinput indisponível ({e}); teste ignorado");
@@ -51,7 +59,7 @@ fn aparece_como_um_controle_xbox_360() {
     let Some(mut g) = gamepad() else { return };
     let dev = abrir(&mut g);
 
-    assert_eq!(dev.name(), Some("vpad virtual gamepad"));
+    assert_eq!(dev.name(), Some("vpad Xbox 360 Controller"));
     let id = dev.input_id();
     assert_eq!((id.vendor(), id.product()), (0x045e, 0x028e));
 
@@ -126,4 +134,67 @@ fn soltar_tudo_libera_o_que_estava_pressionado() {
     assert!(eventos
         .iter()
         .any(|e| e.code() == KeyCode::BTN_EAST.0 && e.value() == 0));
+}
+
+/// (mínimo, máximo, valor atual) do eixo.
+fn estado(dev: &Device, a: Abs) -> (i32, i32, i32) {
+    let i = dev.get_abs_state().unwrap()[a.0 as usize];
+    (i.minimum, i.maximum, i.value)
+}
+
+#[test]
+fn dualshock_4_declara_identidade_faixas_e_gatilhos_como_botao() {
+    let Some(mut g) = gamepad_com(&DUALSHOCK_4) else { return };
+    let dev = abrir(&mut g);
+
+    assert_eq!(dev.name(), Some("vpad DualShock 4"));
+    let id = dev.input_id();
+    assert_eq!((id.vendor(), id.product()), (0x054c, 0x09cc));
+
+    assert_eq!(estado(&dev, Abs::ABS_X), (0, 255, 128));
+    assert!(dev.supported_absolute_axes().unwrap().contains(Abs::ABS_Z));
+    let teclas = dev.supported_keys().unwrap();
+    assert!(teclas.contains(KeyCode::BTN_TL2) && teclas.contains(KeyCode::BTN_TR2));
+}
+
+#[test]
+fn dualshock_4_recebe_analogico_centrado_e_gatilho_nos_dois_formatos() {
+    let Some(mut g) = gamepad_com(&DUALSHOCK_4) else { return };
+    let mut dev = abrir(&mut g);
+
+    // O DS4 já repousa em 128, e o kernel descarta eventos sem mudança de valor:
+    // por isso o teste vai até o fim do curso e volta ao centro.
+    g.aplicar(Evento::Eixo { id: 0, valor: 32767 }).unwrap();
+    g.aplicar(Evento::Eixo { id: 0, valor: 0 }).unwrap();
+    g.aplicar(Evento::Eixo { id: 4, valor: 255 }).unwrap();
+
+    let lidos: Vec<_> = ler(&mut dev, 4).iter().map(|e| (e.event_type(), e.code(), e.value())).collect();
+    assert_eq!(
+        lidos,
+        vec![
+            (EventType::ABSOLUTE, Abs::ABS_X.0, 255),
+            (EventType::ABSOLUTE, Abs::ABS_X.0, 128),
+            (EventType::ABSOLUTE, Abs::ABS_Z.0, 255),
+            (EventType::KEY, KeyCode::BTN_TL2.0, 1),
+        ]
+    );
+}
+
+#[test]
+fn switch_pro_nao_tem_eixo_de_gatilho_so_botao() {
+    let Some(mut g) = gamepad_com(&SWITCH_PRO) else { return };
+    let mut dev = abrir(&mut g);
+
+    assert_eq!(dev.name(), Some("vpad Switch Pro Controller"));
+    let id = dev.input_id();
+    assert_eq!((id.vendor(), id.product()), (0x057e, 0x2009));
+
+    let eixos = dev.supported_absolute_axes().unwrap();
+    assert!(!eixos.contains(Abs::ABS_Z) && !eixos.contains(Abs::ABS_RZ));
+    let (min, max, _) = estado(&dev, Abs::ABS_X);
+    assert_eq!((min, max), (-32767, 32767));
+
+    g.aplicar(Evento::Eixo { id: 5, valor: 255 }).unwrap();
+    let lidos: Vec<_> = ler(&mut dev, 1).iter().map(|e| (e.code(), e.value())).collect();
+    assert_eq!(lidos, vec![(KeyCode::BTN_TR2.0, 1)]);
 }
