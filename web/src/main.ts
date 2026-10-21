@@ -13,6 +13,8 @@ import { createLatencyMeter } from "./latency";
 import { deviceName, mountPairing, pairDevice } from "./pairing";
 import { describeNotice } from "./notice";
 import { mountProfilePicker } from "./picker";
+import { loadShortPing, pingIntervalFor, saveShortPing } from "./pingMode";
+import { mountPingToggle } from "./pingToggle";
 import { PROFILES } from "./profiles";
 import { encodeProfile } from "./protocol";
 import {
@@ -112,6 +114,10 @@ function start(token: string) {
   const picker = mountProfilePicker(document.getElementById("profile-picker")!, (i) =>
     link.send(encodeProfile(i)),
   );
+  mountPingToggle(document.getElementById("ping-toggle")!, loadShortPing(storage), (on) => {
+    saveShortPing(storage, on);
+    link.setPingEvery(pingIntervalFor(on));
+  });
   const meter = createLatencyMeter({ window: 30, timeoutMs: 2000 });
 
   let refresh: ReturnType<typeof setInterval> | undefined;
@@ -125,6 +131,7 @@ function start(token: string) {
   });
 
   const link = connect({
+    pingEveryMs: pingIntervalFor(loadShortPing(storage)),
     url: wsUrl(location),
     protocols: wsProtocols(token),
     now,

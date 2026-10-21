@@ -4,7 +4,7 @@
  * separado do Safari, então ele é pareado por conta própria, dentro do app.
  */
 
-type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type Store = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
 const TOKEN_KEY = "vpad:token";
 const DEVICE_ID_KEY = "vpad:id";

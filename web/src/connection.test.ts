@@ -279,3 +279,50 @@ describe("avisos sobre o modo teclado", () => {
     expect(c.send(Uint8Array.of(1, 0, 1))).toBe(true);
   });
 });
+
+describe("setPingEvery", () => {
+  const pings = () => last().sent.filter((m) => m[0] === 3).length;
+
+  it("troca o intervalo do ping com a conexão aberta", () => {
+    const c = start();
+    last().open();
+    vi.advanceTimersByTime(3000);
+    expect(pings()).toBe(3);
+    c.setPingEvery(100);
+    vi.advanceTimersByTime(1000);
+    expect(pings()).toBe(13);
+    c.setPingEvery(1000);
+    vi.advanceTimersByTime(2000);
+    expect(pings()).toBe(15);
+  });
+
+  it("vale também para a próxima conexão, depois de cair", () => {
+    const c = start();
+    last().open();
+    c.setPingEvery(100);
+    last().close();
+    vi.advanceTimersByTime(500);
+    last().open();
+    vi.advanceTimersByTime(1000);
+    expect(pings()).toBe(10);
+  });
+
+  it("antes de abrir só guarda o valor, sem enviar nada", () => {
+    const c = start();
+    c.setPingEvery(100);
+    vi.advanceTimersByTime(1000);
+    expect(pings()).toBe(0);
+    last().open();
+    vi.advanceTimersByTime(1000);
+    expect(pings()).toBe(10);
+  });
+
+  it("depois de close não volta a mandar ping", () => {
+    const c = start();
+    last().open();
+    c.close();
+    c.setPingEvery(100);
+    vi.advanceTimersByTime(1000);
+    expect(pings()).toBe(0);
+  });
+});
