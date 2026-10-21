@@ -429,3 +429,9 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 
 .note { margin: 6px 0 0; min-height: 0; font-size: 11px; line-height: 1.4; opacity: 0.85; }
 .note:empty { display: none; }
+
+/* Controle ocultado pelo layout: mantém o espaço, some e não recebe toque. */
+.oculto {
+  visibility: hidden;
+  pointer-events: none;
+}

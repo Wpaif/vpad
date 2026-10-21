@@ -21,6 +21,16 @@ describe("bindAppHeight", () => {
     expect(height()).toBe("390px");
   });
 
+  it("define --app-w com a largura real da janela e a atualiza", () => {
+    Object.defineProperty(window, "innerWidth", { value: 844, configurable: true, writable: true });
+    stop = bindAppHeight(window, document.documentElement);
+    const width = () => document.documentElement.style.getPropertyValue("--app-w");
+    expect(width()).toBe("844px");
+    (window as { innerWidth: number }).innerWidth = 667;
+    window.dispatchEvent(new Event("resize"));
+    expect(width()).toBe("667px");
+  });
+
   it("atualiza ao redimensionar", () => {
     stop = bindAppHeight(window, document.documentElement);
     (window as { innerHeight: number }).innerHeight = 369;
