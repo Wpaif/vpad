@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["ws"] }
+futures-util = "0.3.34"
 mime_guess = "2.0.5"
 rust-embed = "8.13.0"
-tokio = { version = "1.54.0", features = ["rt-multi-thread", "macros", "net"] }
+tokio = { version = "1.54.0", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 
 [dev-dependencies]
 http-body-util = "0.1.5"
+tokio-tungstenite = "0.30.0"
 tower = { version = "0.5.3", features = ["util"] }

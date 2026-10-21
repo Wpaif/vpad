@@ -13,3 +13,15 @@ export function lockGestures(): void {
   }
   document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
 }
+
+const LABELS = {
+  connecting: "conectando…",
+  open: "conectado",
+  reconnecting: "reconectando…",
+  closed: "offline",
+} as const;
+
+export function renderStatus(el: HTMLElement, status: keyof typeof LABELS, latencyMs: number | null): void {
+  el.dataset.status = status;
+  el.textContent = status === "open" && latencyMs !== null ? `${latencyMs} ms` : LABELS[status];
+}
