@@ -35,10 +35,10 @@ describe("layoutStorage", () => {
   });
 
   it("armazenamento que lança não quebra a leitura nem a gravação", () => {
-    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("bloqueado"); });
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("cheio"); });
+    const falha = () => { throw new Error("bloqueado"); };
+    vi.stubGlobal("localStorage", { getItem: falha, setItem: falha, removeItem: falha });
     expect(loadLayout()).toEqual(defaultLayout());
     expect(saveLayout(withGroup(defaultLayout(), "face", { dx: 0.1 }))).toBe(false);
-    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 });
