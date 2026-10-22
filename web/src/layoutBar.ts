@@ -6,10 +6,12 @@ interface Options {
   store: LayoutStore;
   /** chamado depois de qualquer mudança de modo (abrir, salvar, cancelar), para a tela se atualizar */
   onChange?: () => void;
+  /** chamado depois de um Salvar que deu certo (o layout salvo aqui ainda vai para o PC) */
+  onSaved?: () => void;
 }
 
 /** Barra do modo edição: o botão do painel abre, e a barra salva, cancela ou restaura o padrão. */
-export function mountLayoutBar({ bar, editButton, store, onChange }: Options): void {
+export function mountLayoutBar({ bar, editButton, store, onChange, onSaved }: Options): void {
   const note = bar.querySelector<HTMLElement>("[data-note]");
   const say = (text: string) => {
     if (note) note.textContent = text; // textContent: nada vira HTML
@@ -34,8 +36,9 @@ export function mountLayoutBar({ bar, editButton, store, onChange }: Options): v
     sync();
   });
   bar.querySelector("[data-act=save]")?.addEventListener("click", () => {
-    if (store.save()) say("");
-    else say("Não foi possível salvar neste navegador.");
+    const saved = store.save();
+    say(saved ? "" : "Não foi possível salvar neste navegador.");
     sync();
+    if (saved) onSaved?.();
   });
 }

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defaultLayout, setHidden, withGroup } from "./layoutModel";
-import { LAYOUT_KEY, loadLayout, saveLayout } from "./layoutStorage";
+import { LAYOUT_KEY, PENDING_KEY, isPending, loadLayout, saveLayout, setPending } from "./layoutStorage";
 
 beforeEach(() => localStorage.clear());
 
@@ -39,6 +39,29 @@ describe("layoutStorage", () => {
     vi.stubGlobal("localStorage", { getItem: falha, setItem: falha, removeItem: falha });
     expect(loadLayout()).toEqual(defaultLayout());
     expect(saveLayout(withGroup(defaultLayout(), "face", { dx: 0.1 }))).toBe(false);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("marca de envio pendente", () => {
+  it("começa sem pendência", () => {
+    expect(isPending()).toBe(false);
+  });
+
+  it("liga e desliga, e desligar apaga a chave", () => {
+    setPending(true);
+    expect(isPending()).toBe(true);
+    expect(localStorage.getItem(PENDING_KEY)).toBe("1");
+    setPending(false);
+    expect(isPending()).toBe(false);
+    expect(localStorage.getItem(PENDING_KEY)).toBeNull();
+  });
+
+  it("armazenamento que lança não quebra", () => {
+    const falha = () => { throw new Error("bloqueado"); };
+    vi.stubGlobal("localStorage", { getItem: falha, setItem: falha, removeItem: falha });
+    expect(isPending()).toBe(false);
+    expect(() => setPending(true)).not.toThrow();
     vi.unstubAllGlobals();
   });
 });

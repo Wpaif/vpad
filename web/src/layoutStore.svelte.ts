@@ -28,6 +28,17 @@ export function createLayoutStore() {
     get editing(): boolean {
       return draft !== null;
     },
+    /** O layout salvo, sem o rascunho (é o que vai para o PC). */
+    get saved(): Layout {
+      return $state.snapshot(saved) as Layout;
+    },
+    /** Troca o layout salvo (vindo do PC), guardando a cópia local. Não mexe numa edição em andamento. */
+    adopt(next: Layout): boolean {
+      if (draft) return false;
+      saveLayout(next);
+      saved = next;
+      return true;
+    },
     edit() {
       draft = $state.snapshot(saved) as Layout;
     },

@@ -1,6 +1,8 @@
 import { defaultLayout, isDefault, parseLayout, serializeLayout, type Layout } from "./layoutModel";
 
 export const LAYOUT_KEY = "vpad:layout";
+/** Existe se o layout salvo aqui ainda não chegou ao PC (sem conexão na hora de salvar). */
+export const PENDING_KEY = "vpad:layout-pendente";
 
 /** Lê o layout salvo; qualquer falha (sem armazenamento, JSON ruim, versão futura) dá o padrão. */
 export function loadLayout(): Layout {
@@ -21,5 +23,22 @@ export function saveLayout(layout: Layout): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+export function isPending(): boolean {
+  try {
+    return localStorage.getItem(PENDING_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setPending(pending: boolean): void {
+  try {
+    if (pending) localStorage.setItem(PENDING_KEY, "1");
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    // sem armazenamento: vale só até recarregar
   }
 }
