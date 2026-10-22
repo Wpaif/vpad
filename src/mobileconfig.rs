@@ -3,6 +3,7 @@
 //! Geral → Sobre → Ajustes de Confiança de Certificado: não há como automatizar isso.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
+use crate::idiomas::{Idioma, descricoes_do_perfil};
 use sha2::{Digest, Sha256};
 
 fn xml(texto: &str) -> String {
@@ -20,8 +21,16 @@ fn uuid_de(finalidade: &str, der: &[u8]) -> String {
     format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
-/// O `.mobileconfig` que instala `ca_der` (certificado da autoridade, em DER).
+/// O `.mobileconfig` que instala `ca_der` (certificado da autoridade, em DER), em português.
 pub fn perfil_ios(ca_der: &[u8], nome_do_pc: &str) -> String {
+    perfil_ios_em(ca_der, nome_do_pc, Idioma::PtBr)
+}
+
+/// O mesmo perfil com as descrições que o iPhone mostra na instalação no idioma pedido. Os
+/// identificadores só dependem do certificado: instalar o perfil em outro idioma o atualiza.
+pub fn perfil_ios_em(ca_der: &[u8], nome_do_pc: &str, idioma: Idioma) -> String {
+    let (descricao_da_autoridade, descricao_do_perfil) = descricoes_do_perfil(idioma);
+    let descricao_do_perfil = descricao_do_perfil.replace("{nome}", &xml(nome_do_pc));
     let uuid_certificado = uuid_de("certificado", ca_der);
     let uuid_perfil = uuid_de("perfil", ca_der);
     let nome = xml(nome_do_pc);
@@ -39,7 +48,7 @@ pub fn perfil_ios(ca_der: &[u8], nome_do_pc: &str) -> String {
       <key>PayloadContent</key>
       <data>{dados}</data>
       <key>PayloadDescription</key>
-      <string>Autoridade de certificação local do vpad, para abrir o controle por HTTPS na rede de casa.</string>
+      <string>{descricao_da_autoridade}</string>
       <key>PayloadDisplayName</key>
       <string>vpad ({nome})</string>
       <key>PayloadIdentifier</key>
@@ -53,7 +62,7 @@ pub fn perfil_ios(ca_der: &[u8], nome_do_pc: &str) -> String {
     </dict>
   </array>
   <key>PayloadDescription</key>
-  <string>Permite ao iPhone confiar no HTTPS do vpad em {nome}.</string>
+  <string>{descricao_do_perfil}</string>
   <key>PayloadDisplayName</key>
   <string>vpad ({nome})</string>
   <key>PayloadIdentifier</key>
@@ -75,6 +84,7 @@ pub fn perfil_ios(ca_der: &[u8], nome_do_pc: &str) -> String {
 #[cfg(test)]
 mod testes {
     use super::*;
+    use crate::idiomas::Idioma;
     use base64::{Engine, engine::general_purpose::STANDARD};
 
     const DER: &[u8] = &[0x30, 0x82, 0x01, 0x0a, 0xde, 0xad, 0xbe, 0xef, 0x00, 0x01, 0x02, 0x03];
@@ -154,5 +164,41 @@ mod testes {
         assert!(xml.contains("<key>PayloadRemovalDisallowed</key>"));
         assert!(xml.contains("<false/>"));
         assert!(!xml.contains("<true/>"));
+    }
+
+    #[test]
+    fn o_perfil_sem_idioma_e_o_em_portugues() {
+        assert_eq!(perfil_ios(DER, "pc"), perfil_ios_em(DER, "pc", Idioma::PtBr));
+    }
+
+    #[test]
+    fn a_descricao_que_o_iphone_mostra_segue_o_idioma() {
+        for idioma in crate::idiomas::TODOS {
+            let (autoridade, perfil) = crate::idiomas::descricoes_do_perfil(idioma);
+            let xml = perfil_ios_em(DER, "meu-pc", idioma);
+            assert!(xml.contains(autoridade), "{idioma:?}: descrição da autoridade");
+            assert!(xml.contains(&perfil.replace("{nome}", "meu-pc")), "{idioma:?}: descrição do perfil");
+            assert!(!xml.contains("{nome}"), "{idioma:?}: marcador sem preencher");
+        }
+        assert!(perfil_ios_em(DER, "pc", Idioma::Ja).contains("家庭内ネットワーク"));
+        assert!(!perfil_ios_em(DER, "pc", Idioma::Ja).contains("Autoridade de certificação"));
+    }
+
+    #[test]
+    fn trocar_de_idioma_nao_troca_a_identidade_do_perfil() {
+        // o mesmo perfil em outro idioma substitui o instalado, não vira um segundo perfil
+        for idioma in crate::idiomas::TODOS {
+            assert_eq!(uuids(&perfil_ios_em(DER, "pc", idioma)), uuids(&perfil_ios(DER, "pc")), "{idioma:?}");
+        }
+    }
+
+    #[test]
+    fn o_nome_do_pc_continua_escapado_na_descricao_de_todos_os_idiomas() {
+        for idioma in crate::idiomas::TODOS {
+            let xml = perfil_ios_em(DER, "pc <&>", idioma);
+            assert!(xml.contains("pc &lt;&amp;&gt;"), "{idioma:?}");
+            assert!(!xml.contains("pc <&>"), "{idioma:?}");
+            assert!(tags_equilibradas(&xml, "dict"), "{idioma:?}");
+        }
     }
 }

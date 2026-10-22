@@ -13,7 +13,7 @@ use std::{
 use axum::{
     Router,
     extract::State,
-    http::{HeaderMap, header},
+    http::{HeaderMap, Uri, header},
     response::{Html, IntoResponse, Response},
     routing::get,
 };
@@ -23,7 +23,8 @@ use tokio::{
     time::Instant,
 };
 
-use crate::mobileconfig::perfil_ios;
+use crate::idiomas::{Idioma, TODOS, escolher, pagina as pagina_em};
+use crate::mobileconfig::perfil_ios_em;
 
 pub struct Configuracao {
     /// certificado da autoridade, em DER e em PEM
@@ -44,19 +45,61 @@ fn endereco_seguro(host: &str) -> Option<&str> {
     simples.then_some(nome)
 }
 
-async fn pagina(State(cfg): State<Arc<Configuracao>>, headers: HeaderMap) -> Html<String> {
+/// O valor de `?lang=` na consulta da URL, se houver. Só serve para escolher um dos idiomas
+/// conhecidos (`Idioma::por_etiqueta` recusa o resto), então não precisa decodificar nada.
+fn lang_da_consulta(consulta: Option<&str>) -> Option<&str> {
+    consulta?.split('&').find_map(|par| par.strip_prefix("lang="))
+}
+
+fn idioma_do_pedido(consulta: Option<&str>, headers: &HeaderMap) -> Idioma {
+    let aceito = headers.get(header::ACCEPT_LANGUAGE).and_then(|v| v.to_str().ok());
+    escolher(lang_da_consulta(consulta), aceito)
+}
+
+/// A resposta depende do idioma pedido: declara qual foi usado e que ela varia com o cabeçalho.
+fn com_idioma(idioma: Idioma, corpo: impl IntoResponse) -> Response {
+    let mut resposta = corpo.into_response();
+    let h = resposta.headers_mut();
+    h.insert(header::CONTENT_LANGUAGE, axum::http::HeaderValue::from_static(idioma.codigo()));
+    h.insert(header::VARY, axum::http::HeaderValue::from_static("Accept-Language"));
+    resposta
+}
+
+/// Os links para trocar de idioma: o atual aparece em negrito, sem link.
+fn seletor_de_idiomas(atual: Idioma) -> String {
+    TODOS
+        .iter()
+        .map(|&i| {
+            let (codigo, nome) = (i.codigo(), i.nome());
+            if i == atual {
+                format!(r#"<b lang="{codigo}" aria-current="true">{nome}</b>"#)
+            } else {
+                format!(r#"<a href="/?lang={codigo}" lang="{codigo}">{nome}</a>"#)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+async fn pagina(State(cfg): State<Arc<Configuracao>>, uri: Uri, headers: HeaderMap) -> Response {
+    let idioma = idioma_do_pedido(uri.query(), &headers);
+    let t = pagina_em(idioma);
+    let codigo = idioma.codigo();
     let host = headers.get(header::HOST).and_then(|h| h.to_str().ok()).and_then(endereco_seguro);
     let abrir = match host {
-        Some(h) => format!(r#"<a class="botao" href="https://{h}:{}/">Abrir o controle</a>"#, cfg.porta_https),
-        None => format!("Abra o endereço do PC com <b>https</b> e a porta <b>{}</b>.", cfg.porta_https),
+        Some(h) => format!(r#"<a class="botao" href="https://{h}:{}/">{}</a>"#, cfg.porta_https, t.abrir_controle),
+        None => t.abrir_sem_endereco_html.replace("{porta}", &cfg.porta_https.to_string()),
     };
-    Html(format!(
-        r#"<!doctype html>
-<html lang="pt-BR">
+    let idiomas = seletor_de_idiomas(idioma);
+    com_idioma(
+        idioma,
+        Html(format!(
+            r#"<!doctype html>
+<html lang="{codigo}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>vpad · configurar HTTPS</title>
+<title>{titulo}</title>
 <style>
   :root {{ color-scheme: dark; font-family: -apple-system, system-ui, sans-serif; }}
   body {{ margin: 0; background: #0b0d12; color: #e6e8ee; line-height: 1.5; }}
@@ -65,36 +108,52 @@ async fn pagina(State(cfg): State<Arc<Configuracao>>, headers: HeaderMap) -> Htm
   li {{ margin: 14px 0; }}
   .botao {{ display: inline-block; padding: 10px 16px; border-radius: 12px; background: #7c9cff; color: #0b0d12; font-weight: 600; text-decoration: none; }}
   .peq {{ opacity: 0.7; font-size: 14px; }}
+  .idiomas {{ font-size: 14px; opacity: 0.85; }}
+  .idiomas a, .idiomas b {{ white-space: nowrap; }}
   a {{ color: #7c9cff; }}
 </style>
 </head>
 <body>
 <main>
-  <h1>Configurar o HTTPS neste aparelho</h1>
-  <p>O vpad protege o acesso com HTTPS. Faça isto uma vez em cada celular.</p>
+  <p class="idiomas">{rotulo_idioma}: {idiomas}</p>
+  <h1>{cabecalho}</h1>
+  <p>{introducao}</p>
   <ol>
-    <li><a class="botao" href="/vpad.mobileconfig">Baixar o perfil</a><br>Toque em <b>Permitir</b>.</li>
-    <li>Abra <b>Ajustes</b> → <b>Perfil baixado</b>, toque no certificado e em <b>Mais detalhes</b>, e confira se a <b>impressão digital SHA-256</b> é igual à mostrada no <b>terminal do PC</b>. Só então toque em <b>Instalar</b>. <b>Não confie</b> em nenhuma impressão digital exibida por esta página: quem estiver interceptando a rede poderia trocá-la.</li>
-    <li>Abra <b>Ajustes</b> → <b>Geral</b> → <b>Sobre</b> → <b>Ajustes de Confiança de Certificado</b> e ative a confiança em <b>vpad</b>.</li>
+    <li><a class="botao" href="/vpad.mobileconfig?lang={codigo}">{baixar}</a><br>{permitir}</li>
+    <li>{instalar}</li>
+    <li>{confianca}</li>
     <li>{abrir}</li>
   </ol>
-  <p class="peq">Android ou computador: baixe o <a href="/ca.crt">certificado</a> e instale-o como autoridade confiável.</p>
+  <p class="peq">{outros}</p>
 </main>
 </body>
 </html>
-"#
-    ))
+"#,
+            titulo = t.titulo,
+            cabecalho = t.cabecalho,
+            introducao = t.introducao,
+            baixar = t.baixar_perfil,
+            permitir = t.passo_permitir_html,
+            instalar = t.passo_instalar_html,
+            confianca = t.passo_confianca_html,
+            outros = t.outros_sistemas_html,
+            rotulo_idioma = t.idioma,
+        )),
+    )
 }
 
-async fn perfil(State(cfg): State<Arc<Configuracao>>) -> Response {
-    (
-        [
-            (header::CONTENT_TYPE, "application/x-apple-aspen-config"),
-            (header::CONTENT_DISPOSITION, "attachment; filename=\"vpad.mobileconfig\""),
-        ],
-        perfil_ios(&cfg.ca_der, &cfg.nome_do_pc),
+async fn perfil(State(cfg): State<Arc<Configuracao>>, uri: Uri, headers: HeaderMap) -> Response {
+    let idioma = idioma_do_pedido(uri.query(), &headers);
+    com_idioma(
+        idioma,
+        (
+            [
+                (header::CONTENT_TYPE, "application/x-apple-aspen-config"),
+                (header::CONTENT_DISPOSITION, "attachment; filename=\"vpad.mobileconfig\""),
+            ],
+            perfil_ios_em(&cfg.ca_der, &cfg.nome_do_pc, idioma),
+        ),
     )
-        .into_response()
 }
 
 async fn certificado(State(cfg): State<Arc<Configuracao>>) -> Response {
@@ -504,5 +563,139 @@ mod testes {
         assert!((88..=90).contains(&restante), "{restante}");
         s.fechar();
         assert_eq!(s.segundos_restantes(), 0);
+    }
+
+    async fn pegar_em(uri: &str, host: Option<&str>, idioma: Option<&str>) -> (StatusCode, header::HeaderMap, String) {
+        let mut req = Request::builder().method("GET").uri(uri);
+        if let Some(h) = host {
+            req = req.header(header::HOST, h);
+        }
+        if let Some(i) = idioma {
+            req = req.header(header::ACCEPT_LANGUAGE, i);
+        }
+        let res = app().oneshot(req.body(Body::empty()).unwrap()).await.unwrap();
+        let (status, headers) = (res.status(), res.headers().clone());
+        let corpo = res.into_body().collect().await.unwrap().to_bytes();
+        (status, headers, String::from_utf8_lossy(&corpo).into_owned())
+    }
+
+    const CONFIANCA: [(&str, &str, &str); 6] = [
+        ("pt-BR", "Ajustes de Confiança de Certificado", "Configurar o HTTPS"),
+        ("en", "Certificate Trust Settings", "Set up HTTPS"),
+        ("es", "Ajustes de confianza de certificados", "Configurar HTTPS"),
+        ("zh-CN", "证书信任设置", "设置 HTTPS"),
+        ("ja", "証明書信頼設定", "HTTPS を設定"),
+        ("ko", "인증서 신뢰 설정", "HTTPS 설정"),
+    ];
+
+    #[tokio::test]
+    async fn sem_idioma_nenhum_a_pagina_continua_em_portugues() {
+        let (_, _, html) = pegar_em("/", Some("pc.local:8080"), None).await;
+        assert!(html.contains(r#"<html lang="pt-BR">"#), "{html}");
+        assert!(html.contains("Ajustes de Confiança de Certificado"));
+    }
+
+    #[tokio::test]
+    async fn o_accept_language_do_iphone_escolhe_o_idioma() {
+        let (_, _, html) = pegar_em("/", Some("pc.local:8080"), Some("ja-JP,ja;q=0.9,en;q=0.8")).await;
+        assert!(html.contains(r#"<html lang="ja">"#), "{html}");
+        assert!(html.contains("証明書信頼設定"));
+        assert!(html.contains("<title>vpad · HTTPS の設定</title>"));
+        assert!(!html.contains("Ajustes"), "nada do português sobra");
+    }
+
+    #[tokio::test]
+    async fn a_consulta_lang_traduz_a_pagina_inteira_em_cada_idioma() {
+        for (codigo, confianca, cabecalho) in CONFIANCA {
+            let (status, _, html) = pegar_em(&format!("/?lang={codigo}"), Some("pc.local:8080"), None).await;
+            assert_eq!(status, StatusCode::OK, "{codigo}");
+            assert!(html.contains(&format!(r#"<html lang="{codigo}">"#)), "{codigo}");
+            assert!(html.contains(confianca), "{codigo}: {confianca}");
+            assert!(html.contains(cabecalho), "{codigo}: {cabecalho}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_escolha_na_pagina_vence_o_idioma_do_navegador() {
+        let (_, _, html) = pegar_em("/?lang=ko", Some("pc.local:8080"), Some("en-US")).await;
+        assert!(html.contains(r#"<html lang="ko">"#));
+    }
+
+    #[tokio::test]
+    async fn lingua_sem_traducao_recebe_o_ingles() {
+        let (_, _, html) = pegar_em("/", Some("pc.local:8080"), Some("fr-FR,de;q=0.8")).await;
+        assert!(html.contains(r#"<html lang="en">"#), "{html}");
+    }
+
+    #[tokio::test]
+    async fn lang_invalido_nao_aparece_na_pagina_e_cai_para_o_cabecalho() {
+        let (status, _, html) = pegar_em("/?lang=%3Cscript%3Ealert(1)%3C/script%3E", Some("pc.local:8080"), Some("es")).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(html.contains(r#"<html lang="es">"#));
+        assert!(!html.contains("<script>alert"), "{html}");
+        assert!(!html.contains("alert(1)"), "{html}");
+    }
+
+    #[tokio::test]
+    async fn o_seletor_lista_os_seis_idiomas_e_marca_o_atual_sem_link() {
+        let (_, _, html) = pegar_em("/?lang=en", Some("pc.local:8080"), None).await;
+        for (codigo, nome) in [("pt-BR", "Português"), ("es", "Español"), ("zh-CN", "中文"), ("ja", "日本語"), ("ko", "한국어")] {
+            assert!(html.contains(&format!(r#"<a href="/?lang={codigo}" lang="{codigo}">{nome}</a>"#)), "{codigo}: {html}");
+        }
+        assert!(html.contains(r#"<b lang="en" aria-current="true">English</b>"#), "{html}");
+        assert!(!html.contains(r#"href="/?lang=en""#), "o idioma atual não é link");
+    }
+
+    #[tokio::test]
+    async fn o_link_do_perfil_leva_o_idioma_para_o_iphone_mostrar_a_descricao_certa() {
+        let (_, _, html) = pegar_em("/?lang=ja", Some("pc.local:8080"), None).await;
+        assert!(html.contains(r#"href="/vpad.mobileconfig?lang=ja""#), "{html}");
+        let (_, _, pt) = pegar_em("/", Some("pc.local:8080"), None).await;
+        assert!(pt.contains(r#"href="/vpad.mobileconfig?lang=pt-BR""#), "{pt}");
+    }
+
+    #[tokio::test]
+    async fn a_resposta_declara_o_idioma_e_que_ela_varia_com_ele() {
+        let (_, headers, _) = pegar_em("/", Some("pc.local:8080"), Some("ko")).await;
+        assert_eq!(headers[header::CONTENT_LANGUAGE], "ko");
+        assert!(headers[header::VARY].to_str().unwrap().to_ascii_lowercase().contains("accept-language"));
+    }
+
+    #[tokio::test]
+    async fn o_botao_de_abrir_o_controle_e_a_dica_sem_endereco_tambem_sao_traduzidos() {
+        let (_, _, com_host) = pegar_em("/?lang=en", Some("192.168.68.103:8080"), None).await;
+        assert!(com_host.contains("Open the controller"), "{com_host}");
+        assert!(com_host.contains("https://192.168.68.103:8443/"), "{com_host}");
+        let (_, _, sem_host) = pegar_em("/?lang=en", None, None).await;
+        assert!(sem_host.contains("port <b>8443</b>"), "{sem_host}");
+        assert!(!sem_host.contains("{porta}"), "{sem_host}");
+    }
+
+    #[tokio::test]
+    async fn o_perfil_para_o_iphone_vem_no_idioma_pedido() {
+        let (_, headers, ja) = pegar_em("/vpad.mobileconfig?lang=ja", None, None).await;
+        assert!(ja.contains("家庭内ネットワーク"), "{ja}");
+        assert!(headers[header::VARY].to_str().unwrap().to_ascii_lowercase().contains("accept-language"));
+        let (_, _, pt) = pegar_em("/vpad.mobileconfig", None, None).await;
+        assert!(pt.contains("Autoridade de certificação local do vpad"), "{pt}");
+        let (_, _, en) = pegar_em("/vpad.mobileconfig", None, Some("en-US")).await;
+        assert!(en.contains("vpad local certificate authority"), "{en}");
+    }
+
+    #[tokio::test]
+    async fn o_endereco_malicioso_continua_sem_virar_html_em_qualquer_idioma() {
+        for codigo in ["pt-BR", "en", "ja"] {
+            let (status, _, html) =
+                pegar_em(&format!("/?lang={codigo}"), Some("evil.com/\"><script>alert(1)</script>"), None).await;
+            assert_eq!(status, StatusCode::OK, "{codigo}");
+            assert!(!html.contains("<script>alert"), "{codigo}");
+            assert!(!html.contains("evil.com"), "{codigo}");
+        }
+    }
+
+    #[tokio::test]
+    async fn o_nome_de_um_idioma_nunca_quebra_no_meio() {
+        let (_, _, html) = pegar_em("/?lang=en", Some("pc.local:8080"), None).await;
+        assert!(html.contains(".idiomas a, .idiomas b { white-space: nowrap; }"), "{html}");
     }
 }
