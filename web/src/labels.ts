@@ -5,6 +5,7 @@
  */
 
 import { t } from "./i18n";
+import { keyLabel } from "./keyNames";
 import type { Key } from "./locales/pt-BR";
 
 type Shape = "cross" | "circle" | "square" | "triangle";
@@ -82,7 +83,7 @@ interface KeyInfo {
 
 /** No modo teclado cada botão mostra a tecla que aciona (controle sem tecla mostra um traço). */
 export function applyKeyboardLabels(pad: HTMLElement, map: Record<string, string>, keys: readonly KeyInfo[]): void {
-  const names = new Map(keys.map((k) => [k.id, k.rotulo]));
+  const names = new Map(keys.map((k) => [k.id, keyLabel(k)]));
   const controls = Object.keys(LABELS.xbox360!) as Control[];
   for (const control of controls) {
     const el = pad.querySelector<HTMLElement>(selector(control));

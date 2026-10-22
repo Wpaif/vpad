@@ -109,7 +109,7 @@ export const ja: Record<Key, string> = {
   "keyGroup.special": "特殊キー",
   "keyGroup.function": "ファンクション",
   "keyGroup.symbols": "記号",
-  "key.space": "スペース",
+  "key.space": "Space",
   "key.backspace": "BS",
   "profiles.keyboard": "キーボード",
   "profiles.keyboard.short": "キー",

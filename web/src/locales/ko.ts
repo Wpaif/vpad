@@ -109,7 +109,7 @@ export const ko: Record<Key, string> = {
   "keyGroup.special": "특수 키",
   "keyGroup.function": "기능 키",
   "keyGroup.symbols": "기호",
-  "key.space": "스페이스",
+  "key.space": "Space",
   "key.backspace": "BS",
   "profiles.keyboard": "키보드",
   "profiles.keyboard.short": "키보드",

@@ -275,6 +275,20 @@ make check     # test + audit
 - Para regenerar os ícones depois de editar `web/public/icon.svg`: `./scripts/gerar-icones.sh`
   (precisa de `rsvg-convert` e `magick`).
 
+### Idiomas
+
+Os textos da página ficam em `web/src/locales/` (um arquivo por idioma). O português
+(`pt-BR.ts`) define as chaves; os outros são tipados com as mesmas chaves, então esquecer uma
+tradução é erro de compilação (`npm run build`) e de teste. Para mudar um texto, edite a chave nos
+seis arquivos. Use `t("chave")` no código, sempre na hora do uso (nunca em constante de módulo,
+porque o idioma é escolhido só depois do carregamento) e `data-i18n` no HTML. O teste
+`i18nTextos.test.ts` falha se sobrar texto em português fixo no código.
+
+O servidor não traduz nada: toda resposta de erro da API traz um `codigo` estável (por exemplo
+`pareamento_fechado`, `mapa_invalido`, `gravacao_falhou`) além da mensagem em português, e a página
+traduz pelo código. Os rótulos de tecla (`Espaço`, `Apagar`) e os nomes dos grupos de teclas
+também são traduzidos na página (`web/src/keyNames.ts`).
+
 Fluxo de trabalho do projeto: uma branch por funcionalidade (`feature/<nome>`), testes escritos
 antes da implementação, e merge na `master` só com os testes passando.
 
