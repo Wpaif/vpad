@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { LatencySnapshot } from "./latency";
 import { sparklinePoints } from "./sparkline";
 
@@ -25,16 +26,16 @@ export function lockGestures(): void {
   );
 }
 
-const LABELS = {
-  connecting: "conectando…",
-  open: "conectado",
-  reconnecting: "reconectando…",
-  closed: "offline",
+const STATUS_KEYS = {
+  connecting: "status.connecting",
+  open: "status.open",
+  reconnecting: "status.reconnecting",
+  closed: "status.closed",
 } as const;
 
-export function renderStatus(el: HTMLElement, status: keyof typeof LABELS, latencyMs: number | null): void {
+export function renderStatus(el: HTMLElement, status: keyof typeof STATUS_KEYS, latencyMs: number | null): void {
   el.dataset.status = status;
-  el.textContent = status === "open" && latencyMs !== null ? `${latencyMs} ms` : LABELS[status];
+  el.textContent = status === "open" && latencyMs !== null ? `${latencyMs} ms` : t(STATUS_KEYS[status]);
 }
 
 const fmtMs = (v: number | null) => (v === null ? "–" : `${v} ms`);

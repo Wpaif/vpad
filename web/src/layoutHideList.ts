@@ -1,12 +1,21 @@
+import { t } from "./i18n";
 import { CONTROL_IDS, isHidden, type ControlId } from "./layoutModel";
+import type { Key } from "./locales/pt-BR";
 import type { LayoutStore } from "./layoutStore.svelte";
 
-const NAMES: Record<ControlId, string> = {
-  A: "A", B: "B", X: "X", Y: "Y",
-  LB: "LB", RB: "RB", LT: "LT", RT: "RT",
-  Select: "Select", Start: "Start",
-  Up: "Cima", Down: "Baixo", Left: "Esquerda", Right: "Direita",
-  StickLeft: "Analógico esq.", StickRight: "Analógico dir.",
+/** Nomes que mudam com o idioma; os demais (A, LB, Select…) são o próprio id do controle. */
+const KEYED: Partial<Record<ControlId, Key>> = {
+  Up: "direction.up",
+  Down: "direction.down",
+  Left: "direction.left",
+  Right: "direction.right",
+  StickLeft: "hideList.stickLeft",
+  StickRight: "hideList.stickRight",
+};
+
+const nameOf = (id: ControlId): string => {
+  const key = KEYED[id];
+  return key ? t(key) : id;
 };
 
 interface Options {
@@ -46,7 +55,7 @@ export function mountHideList({ panel, opener, store, onChange, labelOf }: Optio
     if (!store.editing) open = false;
     panel.hidden = !open;
     for (const [id, chip] of chips) {
-      const name = labelOf?.(id) ?? NAMES[id];
+      const name = labelOf?.(id) ?? nameOf(id);
       chip.textContent = name;
       chip.setAttribute("aria-label", name);
       chip.setAttribute("aria-checked", String(!isHidden(store.current, id)));

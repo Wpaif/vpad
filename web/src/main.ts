@@ -34,6 +34,13 @@ import { mountLayoutEditor } from "./layoutEditor";
 import { createLayoutSync } from "./layoutSync";
 import { renderSyncNote } from "./layoutSyncNote";
 
+const storage = safeStorage();
+
+// O idioma vem antes de qualquer texto (inclusive o do Pad): o que o usuário escolheu, ou o do celular.
+initLanguage({ languages: navigator.languages?.length ? navigator.languages : [navigator.language], storage });
+applyStaticTranslations(document);
+mountLanguagePicker(document.getElementById("language-select") as HTMLSelectElement, storage);
+
 const layoutStore = createLayoutStore();
 mount(Pad, {
   target: document.getElementById("app")!,
@@ -47,13 +54,7 @@ mount(Pad, {
   },
 });
 
-const storage = safeStorage();
 const pad = document.getElementById("pad")!;
-
-// O idioma vem antes de qualquer texto: o que o usuário escolheu, ou o do celular.
-initLanguage({ languages: navigator.languages?.length ? navigator.languages : [navigator.language], storage });
-applyStaticTranslations(document);
-mountLanguagePicker(document.getElementById("language-select") as HTMLSelectElement, storage);
 
 lockGestures();
 enterFullscreenOnTouch(document);

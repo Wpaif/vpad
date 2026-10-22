@@ -20,73 +20,73 @@
   <div id="app"></div>
 
   <header class="topbar">
-    <button id="status" class="status" aria-controls="stats" data-status="connecting">conectando…</button>
-    <button id="toggle" class="toggle" aria-label="Mostrar ou ocultar controles">
+    <button id="status" class="status" aria-controls="stats" data-status="connecting" data-i18n="status.connecting">conectando…</button>
+    <button id="toggle" class="toggle" aria-label="Mostrar ou ocultar controles" data-i18n-aria-label="topbar.toggle">
       <svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.7 9 1.5 12c1.2 3 5 7 10.5 7s9.3-4 10.500-7C21.300 9 17.500 5 12 5zm0 11a4 4 0 110-8 4 4 0 010 8z"/></svg>
     </button>
   </header>
 
   <aside id="install-hint" class="hint" hidden>
-    <p>Para usar em tela cheia: <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>. Abra pelo ícone e <b>pareie de novo</b> com o código do terminal.</p>
-    <button id="install-hint-close" aria-label="Dispensar dica">×</button>
+    <p data-i18n-html="installHint.text">Para usar em tela cheia: <b>Compartilhar</b> → <b>Adicionar à Tela de Início</b>. Abra pelo ícone e <b>pareie de novo</b> com o código do terminal.</p>
+    <button id="install-hint-close" aria-label="Dispensar dica" data-i18n-aria-label="installHint.close">×</button>
   </aside>
 
-  <section id="stats" class="stats" hidden aria-label="Latência">
+  <section id="stats" class="stats" hidden aria-label="Latência" data-i18n-aria-label="stats.aria">
     <div class="picker-row">
-      <span class="label">controle</span>
-      <div id="profile-picker" class="picker" role="group" aria-label="Perfil do controle"></div>
+      <span class="label" data-i18n="profile.label">controle</span>
+      <div id="profile-picker" class="picker" role="group" aria-label="Perfil do controle" data-i18n-aria-label="profilePicker.aria"></div>
       <p id="profile-note" class="note" role="status"></p>
-      <button id="open-key-editor" class="link" type="button">Editar teclas…</button>
+      <button id="open-key-editor" class="link" type="button" data-i18n="keyEditor.open">Editar teclas…</button>
     </div>
     <dl>
-      <div><dt>último</dt><dd data-stat="last">–</dd></div>
-      <div><dt>média</dt><dd data-stat="avg">–</dd></div>
-      <div><dt>mín</dt><dd data-stat="min">–</dd></div>
-      <div><dt>máx</dt><dd data-stat="max">–</dd></div>
-      <div><dt>jitter</dt><dd data-stat="jitter">–</dd></div>
-      <div><dt>perda</dt><dd data-stat="loss">0%</dd></div>
+      <div><dt data-i18n="stats.last">último</dt><dd data-stat="last">–</dd></div>
+      <div><dt data-i18n="stats.avg">média</dt><dd data-stat="avg">–</dd></div>
+      <div><dt data-i18n="stats.min">mín</dt><dd data-stat="min">–</dd></div>
+      <div><dt data-i18n="stats.max">máx</dt><dd data-stat="max">–</dd></div>
+      <div><dt data-i18n="stats.jitter">jitter</dt><dd data-stat="jitter">–</dd></div>
+      <div><dt data-i18n="stats.loss">perda</dt><dd data-stat="loss">0%</dd></div>
     </dl>
     <label class="language-row">
       <span class="label" data-i18n="language.label">Idioma</span>
       <select id="language-select" data-i18n-aria-label="language.label" aria-label="Idioma"></select>
     </label>
     <p id="layout-sync" class="note" role="status"></p>
-    <button id="edit-layout" class="link" type="button">Editar layout…</button>
-    <button id="ping-toggle" class="link" type="button" aria-pressed="false">ping curto: desligado</button>
+    <button id="edit-layout" class="link" type="button" data-i18n="layout.edit">Editar layout…</button>
+    <button id="ping-toggle" class="link" type="button" aria-pressed="false" data-i18n="ping.off">ping curto: desligado</button>
     <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
       <polyline data-stat="spark" points=""/>
     </svg>
   </section>
 
   <div id="layout-dock" class="layout-dock">
-    <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" hidden>
-      <span class="layout-hint">Arraste os grupos</span>
+    <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" data-i18n-aria-label="layoutBar.aria" hidden>
+      <span class="layout-hint" data-i18n="layoutBar.hint">Arraste os grupos</span>
     <label class="layout-opacity">
-      <span class="layout-opacity-label">Opacidade</span>
-      <input id="layout-opacity" type="range" min="20" max="100" step="5" value="100" aria-label="Opacidade dos botões">
+      <span class="layout-opacity-label" data-i18n="layoutBar.opacity">Opacidade</span>
+      <input id="layout-opacity" type="range" min="20" max="100" step="5" value="100" aria-label="Opacidade dos botões" data-i18n-aria-label="layoutBar.opacity.aria">
       <output id="layout-opacity-value">100%</output>
     </label>
       <span data-note class="layout-note" role="status"></span>
-      <button type="button" data-act="buttons">Botões</button>
-      <button type="button" data-act="reset">Restaurar</button>
-      <button type="button" data-act="cancel">Cancelar</button>
-      <button type="button" data-act="save" class="primary">Salvar</button>
+      <button type="button" data-act="buttons" data-i18n="layoutBar.buttons">Botões</button>
+      <button type="button" data-act="reset" data-i18n="layoutBar.reset">Restaurar</button>
+      <button type="button" data-act="cancel" data-i18n="layoutBar.cancel">Cancelar</button>
+      <button type="button" data-act="save" class="primary" data-i18n="layoutBar.save">Salvar</button>
     </div>
-    <div id="hide-list" class="hide-list" role="group" aria-label="Botões visíveis" hidden></div>
+    <div id="hide-list" class="hide-list" role="group" aria-label="Botões visíveis" data-i18n-aria-label="hideList.aria" hidden></div>
   </div>
-  <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" hidden></div>
+  <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" data-i18n-aria-label="keyEditor.aria" hidden></div>
 
-  <div id="pair" class="gate" role="dialog" aria-modal="true" aria-label="Parear este aparelho" hidden>
+  <div id="pair" class="gate" role="dialog" aria-modal="true" aria-label="Parear este aparelho" data-i18n-aria-label="pair.title" hidden>
     <form class="gate-box" autocomplete="off">
-      <h1>Parear este aparelho</h1>
-      <p>No PC, pressione <b>Enter</b> no terminal do vpad para abrir o pareamento. Digite aqui o código de 6 dígitos que aparece lá (ele muda a cada 30 segundos) e aprove o pedido no PC.</p>
+      <h1 data-i18n="pair.title">Parear este aparelho</h1>
+      <p data-i18n-html="pair.help">No PC, pressione <b>Enter</b> no terminal do vpad para abrir o pareamento. Digite aqui o código de 6 dígitos que aparece lá (ele muda a cada 30 segundos) e aprove o pedido no PC.</p>
       <input name="codigo" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6"
-             autocomplete="one-time-code" placeholder="000000" aria-label="Código de pareamento">
-      <button type="submit" disabled>Parear</button>
+             autocomplete="one-time-code" placeholder="000000" aria-label="Código de pareamento" data-i18n-aria-label="pair.code.aria">
+      <button type="submit" disabled data-i18n="pair.submit">Parear</button>
       <p class="pair-error" role="alert"></p>
     </form>
   </div>
 
-  <div class="rotate" role="alert">Gire o celular para o modo paisagem</div>
+  <div class="rotate" role="alert" data-i18n="rotate.hint">Gire o celular para o modo paisagem</div>
 </body>
 </html>
