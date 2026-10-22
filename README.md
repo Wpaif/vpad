@@ -27,6 +27,7 @@ manda os toques pela rede local, e um servidor em Rust no PC cria um **gamepad o
 - [Estrutura do projeto](#estrutura-do-projeto)
 - [Desenvolvimento](#desenvolvimento)
 - [Problemas comuns](#problemas-comuns)
+- [Licença](#licença)
 
 ## Requisitos
 
@@ -285,3 +286,7 @@ antes da implementação, e merge na `master` só com os testes passando.
 | a primeira tecla depois de uma pausa chega atrasada | ligue o **ping curto** no painel; é o Wi-Fi do celular dormindo |
 | o app da Tela de Início pede o pareamento de novo | ele tem armazenamento separado do Safari; pareie uma vez dentro do app |
 | o ícone antigo continua na Tela de Início | o iOS fixa o ícone ao adicionar: remova o app e adicione de novo |
+
+## Licença
+
+MIT. Veja o arquivo [LICENSE](LICENSE).
