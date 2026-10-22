@@ -1,3 +1,5 @@
+import { setLanguage } from "./i18n";
+import { CATALOGS } from "./locales";
 import { describe, expect, it, vi } from "vitest";
 import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
 
@@ -48,9 +50,21 @@ describe("saveKeyboard", () => {
     expect(JSON.parse(init.body)).toEqual({ mapa: { A: "Space" } });
   });
 
-  it("repassa a mensagem de erro do servidor", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(resposta(400, { erro: "tecla desconhecida: Hyper" }));
-    await expect(saveKeyboard({ A: "Hyper" }, "tok", fetchFn)).rejects.toThrow("tecla desconhecida: Hyper");
+  it("mapa recusado pelo PC mostra uma mensagem traduzida, não o texto que o servidor mandou", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(400, { codigo: "mapa_invalido", erro: "tecla desconhecida: Hyper" }));
+    const erro = await saveKeyboard({ A: "Hyper" }, "tok", fetchFn).catch((e: Error) => e);
+    expect((erro as Error).message).toBe("o PC recusou este mapa de teclas");
+    expect((erro as Error).message).not.toContain("Hyper");
+  });
+
+  it("o PC não conseguir gravar também vira mensagem própria", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(500, { codigo: "gravacao_falhou", erro: "não consegui gravar: x" }));
+    await expect(saveKeyboard({}, "tok", fetchFn)).rejects.toThrow("o PC não conseguiu gravar as teclas");
+  });
+
+  it("erro sem código conhecido mostra só o status", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(502, { erro: "texto do servidor" }));
+    await expect(saveKeyboard({}, "tok", fetchFn)).rejects.toThrow("não consegui salvar (502)");
   });
 
   it("403 ao salvar também explica a falta de permissão", async () => {
@@ -65,6 +79,21 @@ describe("saveKeyboard", () => {
 
   it("401 vira mensagem de acesso negado", async () => {
     const fetchFn = vi.fn().mockResolvedValue(resposta(401, { erro: "não autorizado" }));
-    await expect(saveKeyboard({}, "errado", fetchFn)).rejects.toThrow("não autorizado");
+    await expect(saveKeyboard({}, "errado", fetchFn)).rejects.toThrow(/parear/i);
+  });
+});
+
+describe("erros do teclado em cada idioma", () => {
+  const resposta2 = (status: number, corpo: unknown) =>
+    vi.fn().mockResolvedValue(new Response(JSON.stringify(corpo), { status }));
+
+  it.each(["en", "es", "zh-CN", "ja", "ko"] as const)("%s", async (idioma) => {
+    setLanguage(idioma);
+    const c = CATALOGS[idioma] as Record<string, string>;
+    await expect(loadKeyboard("t", resposta2(401, {}))).rejects.toThrow(c["keyboard.error.denied"]!);
+    await expect(loadKeyboard("t", resposta2(403, {}))).rejects.toThrow(c["keyboard.error.noPermission"]!);
+    await expect(saveKeyboard({}, "t", resposta2(400, { codigo: "mapa_invalido" }))).rejects.toThrow(c["keyboard.error.invalid"]!);
+    await expect(saveKeyboard({}, "t", resposta2(500, { codigo: "gravacao_falhou" }))).rejects.toThrow(c["keyboard.error.writeFailed"]!);
+    setLanguage("pt-BR");
   });
 });
