@@ -1,7 +1,8 @@
-# Empacota o binário para Linux x86_64 e o anexa ao release do GitHub.
-# - Ao criar uma tag v*: gera o pacote e publica (cria o release com as notas do changelog, se não existir).
+# Empacota o binário para Linux (x86_64 e aarch64) e o anexa ao release do GitHub. Cada arquitetura
+# compila nativamente no seu runner (nada de compilação cruzada).
+# - Ao criar uma tag v*: gera os pacotes e publica (cria o release com as notas do changelog, se não existir).
 # - Manualmente (Actions → Release → Run workflow): informe a tag de um release que já existe para
-#   anexar o pacote a ele; sem tag, só gera o pacote como artefato (para testar).
+#   anexar os pacotes a ele; sem tag, só gera os pacotes como artefatos (para testar).
 name: Release
 
 on:
@@ -11,11 +12,15 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag a empacotar e publicar (por exemplo v0.1.0). Em branco: só gera o artefato de teste.'
+        description: 'Tag a empacotar e publicar (por exemplo v0.1.0). Em branco: só gera os artefatos de teste.'
         required: false
         default: ''
       fonte:
         description: 'Ref (branch, tag ou commit) a compilar. Em branco: a própria tag. Serve para anexar o pacote a uma tag anterior aos scripts de release (a versão do Cargo.toml precisa bater com a da tag).'
+        required: false
+        default: ''
+      arquiteturas:
+        description: 'Quais pacotes gerar: todas, x86_64 ou aarch64. Em branco: todas. Para acrescentar uma arquitetura a um release que já tem a outra, escolha só ela.'
         required: false
         default: ''
 
@@ -23,12 +28,31 @@ permissions:
   contents: read
 
 jobs:
-  empacotar:
-    name: empacotar
-    # glibc mais antiga: o binário roda também em distribuições mais velhas que o runner
+  plano:
+    name: plano
     runs-on: ubuntu-22.04
+    outputs:
+      matriz: ${{ steps.matriz.outputs.matriz }}
+    env:
+      ARQUITETURAS: ${{ inputs.arquiteturas }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.fonte || inputs.tag || github.ref }}
+      - id: matriz
+        run: echo "matriz=$(./scripts/arquiteturas-do-release.sh "$ARQUITETURAS")" >> "$GITHUB_OUTPUT"
+
+  empacotar:
+    name: empacotar (${{ matrix.arch }})
+    needs: plano
+    # glibc mais antiga: o binário roda também em distribuições mais velhas que o runner
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plano.outputs.matriz) }}
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
+      ARQ: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,11 +77,11 @@ jobs:
       - name: Empacotar
         run: |
           versao="$(./scripts/versao-do-release.sh "$TAG")"
-          ./scripts/empacotar-release.sh "$versao" target/release/vpad dist-release
+          ./scripts/empacotar-release.sh "$versao" target/release/vpad dist-release "$ARQ"
           ls -l dist-release
       - uses: actions/upload-artifact@v4
         with:
-          name: pacote
+          name: pacote-${{ matrix.arch }}
           path: dist-release
           retention-days: 7
 
@@ -78,9 +102,10 @@ jobs:
           ref: ${{ inputs.fonte || inputs.tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
-          name: pacote
+          pattern: pacote-*
+          merge-multiple: true
           path: dist-release
-      - name: Criar o release, se ainda não existir, e anexar o pacote
+      - name: Criar o release, se ainda não existir, e anexar os pacotes
         run: |
           versao="$(./scripts/versao-do-release.sh "$TAG")"
           if ! gh release view "$TAG" >/dev/null 2>&1; then

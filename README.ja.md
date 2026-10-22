@@ -59,9 +59,9 @@ PC を再起動しても権限を保ちたい場合は、ACL による権限（�
 
 ## インストール
 
-### ビルド済みバイナリ（Linux x86_64）
+### ビルド済みバイナリ（Linux x86_64 / aarch64）
 
-使うだけなら、[最新のリリース](https://github.com/Wpaif/vpad/releases/latest)からパッケージ（`vpad-X.Y.Z-linux-x86_64.tar.gz`。隣に `.sha256` があります）をダウンロードし、チェックサムを確認して展開します。Rust や Node は不要ですが、[必要なもの](#必要なもの)にある `uinput` の設定は引き続き必要です。そのあとは[初めて使うとき](#初めて使うとき)に進んでください。
+使うだけなら、[最新のリリース](https://github.com/Wpaif/vpad/releases/latest)からパッケージ（`vpad-X.Y.Z-linux-x86_64.tar.gz`。隣に `.sha256` があります）をダウンロードし、チェックサムを確認して展開します。Rust や Node は不要ですが、[必要なもの](#必要なもの)にある `uinput` の設定は引き続き必要です。パッケージは **x86_64**（Intel/AMD）と **aarch64**（64 ビット ARM。64 ビット OS を使った Raspberry Pi 4/5 など）の両方があります。ARM の場合は名前の `x86_64` を `aarch64` に置き換えてください。 そのあとは[初めて使うとき](#初めて使うとき)に進んでください。
 
 ```sh
 sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256

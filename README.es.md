@@ -61,9 +61,9 @@ sobreviva a un reinicio del PC.
 
 ## Instalación
 
-### Binario listo (Linux x86_64)
+### Binario listo (Linux x86_64 / aarch64)
 
-Si solo quieres usarlo, descarga el paquete de la [última versión](https://github.com/Wpaif/vpad/releases/latest) (`vpad-X.Y.Z-linux-x86_64.tar.gz`, con el `.sha256` al lado), comprueba la suma y extráelo. No hacen falta Rust ni Node, pero la configuración de `uinput` de los [requisitos](#requisitos) sigue siendo necesaria. Después sigue el [primer uso](#primer-uso).
+Si solo quieres usarlo, descarga el paquete de la [última versión](https://github.com/Wpaif/vpad/releases/latest) (`vpad-X.Y.Z-linux-x86_64.tar.gz`, con el `.sha256` al lado), comprueba la suma y extráelo. No hacen falta Rust ni Node, pero la configuración de `uinput` de los [requisitos](#requisitos) sigue siendo necesaria. Hay paquetes para **x86_64** (Intel/AMD) y **aarch64** (ARM de 64 bits, como una Raspberry Pi 4/5 con sistema de 64 bits): en ARM, usa el nombre con `aarch64` en lugar de `x86_64`. Después sigue el [primer uso](#primer-uso).
 
 ```sh
 sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256

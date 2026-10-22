@@ -58,9 +58,9 @@ sudo setfacl -m u:$USER:rw /dev/uinput
 
 ## 安装
 
-### 现成的可执行文件（Linux x86_64）
+### 现成的可执行文件（Linux x86_64 / aarch64）
 
-如果你只想使用它，请从[最新版本](https://github.com/Wpaif/vpad/releases/latest)下载压缩包（`vpad-X.Y.Z-linux-x86_64.tar.gz`，旁边有对应的 `.sha256` 文件），核对校验和并解压。不需要 Rust 或 Node，但仍然需要[系统要求](#系统要求)中的 `uinput` 设置。之后请按[首次使用](#首次使用)操作。
+如果你只想使用它，请从[最新版本](https://github.com/Wpaif/vpad/releases/latest)下载压缩包（`vpad-X.Y.Z-linux-x86_64.tar.gz`，旁边有对应的 `.sha256` 文件），核对校验和并解压。不需要 Rust 或 Node，但仍然需要[系统要求](#系统要求)中的 `uinput` 设置。提供 **x86_64**（Intel/AMD）和 **aarch64**（64 位 ARM，例如运行 64 位系统的 Raspberry Pi 4/5）两种压缩包：使用 ARM 时，请把名称中的 `x86_64` 换成 `aarch64`。 之后请按[首次使用](#首次使用)操作。
 
 ```sh
 sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256

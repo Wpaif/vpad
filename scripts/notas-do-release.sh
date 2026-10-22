@@ -34,7 +34,7 @@ cat <<MENSAGEM
 
 ---
 
-**Como usar:** baixe \`vpad-$versao-linux-x86_64.tar.gz\` (Linux x86_64; confira com o \`.sha256\` ao lado), extraia e rode \`./vpad\`. Ou compile pelo [README](https://github.com/Wpaif/vpad#instalação) (também em [English](https://github.com/Wpaif/vpad/blob/master/README.en.md), [Español](https://github.com/Wpaif/vpad/blob/master/README.es.md), [中文](https://github.com/Wpaif/vpad/blob/master/README.zh-CN.md), [日本語](https://github.com/Wpaif/vpad/blob/master/README.ja.md) e [한국어](https://github.com/Wpaif/vpad/blob/master/README.ko.md)).
+**Como usar:** baixe o pacote da sua arquitetura, \`vpad-$versao-linux-x86_64.tar.gz\` (Intel/AMD) ou \`vpad-$versao-linux-aarch64.tar.gz\` (ARM de 64 bits, como o Raspberry Pi 4/5 com sistema de 64 bits), confira com o \`.sha256\` ao lado, extraia e rode \`./vpad\`. Ou compile pelo [README](https://github.com/Wpaif/vpad#instalação) (também em [English](https://github.com/Wpaif/vpad/blob/master/README.en.md), [Español](https://github.com/Wpaif/vpad/blob/master/README.es.md), [中文](https://github.com/Wpaif/vpad/blob/master/README.zh-CN.md), [日本語](https://github.com/Wpaif/vpad/blob/master/README.ja.md) e [한국어](https://github.com/Wpaif/vpad/blob/master/README.ko.md)).
 
 Histórico completo: [CHANGELOG.md](https://github.com/Wpaif/vpad/blob/master/CHANGELOG.md).
 MENSAGEM
