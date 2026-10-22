@@ -132,6 +132,21 @@ describe("scripts/empacotar-release.sh", () => {
   });
 });
 
+describe("scripts/versao-do-release.sh", () => {
+  it("de uma tag vX.Y.Z devolve X.Y.Z", () => {
+    expect(rodar("versao-do-release.sh", ["v0.1.0"]).saida.trim()).toBe("0.1.0");
+    expect(rodar("versao-do-release.sh", ["v12.3.45"]).saida.trim()).toBe("12.3.45");
+  });
+
+  it("de qualquer outra coisa (nome de branch, vazio, tag malformada, tentativa de injeção) usa a versão do Cargo.toml", () => {
+    for (const nome of ["master", "", "v1.2", "v0.1.0-rc1", "0.1.0", "v0.1.0; ls", "$(id)"]) {
+      const r = rodar("versao-do-release.sh", nome === "" ? [] : [nome]);
+      expect(r.codigo, nome).toBe(0);
+      expect(r.saida.trim(), nome).toBe(versao);
+    }
+  });
+});
+
 describe("workflow de release", () => {
   const wf = () => readFileSync(raiz(".github/workflows/release.yml"), "utf8");
 
@@ -152,6 +167,16 @@ describe("workflow de release", () => {
       if (!/\$\{\{\s*(inputs\.|github\.ref_name|github\.ref\b)/.test(linha)) continue;
       expect(linha, linha).toMatch(/^\s+(TAG|ref|name|path|if):/);
     }
+  });
+
+  it("aceita uma 'fonte': compilar de outra ref, para anexar o pacote a uma tag anterior aos scripts de release", () => {
+    expect(wf()).toMatch(/inputs:[\s\S]*?fonte:/);
+    expect(wf()).toMatch(/ref: \$\{\{ inputs\.fonte \|\| inputs\.tag \|\| github\.ref \}\}/);
+  });
+
+  it("a versão vem do script testado, e o teste sem tag usa a versão do Cargo.toml", () => {
+    expect(wf()).toContain("./scripts/versao-do-release.sh");
+    expect(wf()).not.toMatch(/\$\{TAG#v\}/);
   });
 
   it("publica só quando há uma tag para publicar", () => {

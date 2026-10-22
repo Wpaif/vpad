@@ -14,6 +14,10 @@ on:
         description: 'Tag a empacotar e publicar (por exemplo v0.1.0). Em branco: só gera o artefato de teste.'
         required: false
         default: ''
+      fonte:
+        description: 'Ref (branch, tag ou commit) a compilar. Em branco: a própria tag. Serve para anexar o pacote a uma tag anterior aos scripts de release (a versão do Cargo.toml precisa bater com a da tag).'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -28,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.fonte || inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -48,7 +52,7 @@ jobs:
           ./target/release/vpad --dispositivos
       - name: Empacotar
         run: |
-          versao="${TAG#v}"
+          versao="$(./scripts/versao-do-release.sh "$TAG")"
           ./scripts/empacotar-release.sh "$versao" target/release/vpad dist-release
           ls -l dist-release
       - uses: actions/upload-artifact@v4
@@ -71,14 +75,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ inputs.fonte || inputs.tag || github.ref }}
       - uses: actions/download-artifact@v4
         with:
           name: pacote
           path: dist-release
       - name: Criar o release, se ainda não existir, e anexar o pacote
         run: |
-          versao="${TAG#v}"
+          versao="$(./scripts/versao-do-release.sh "$TAG")"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             ./scripts/notas-do-release.sh "$versao" > notas.md
             gh release create "$TAG" --verify-tag --title "vpad $versao" --notes-file notas.md
