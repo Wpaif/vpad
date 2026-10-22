@@ -518,3 +518,25 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 .hide-list button[aria-checked="false"] { opacity: 0.45; text-decoration: line-through; }
 /* na edição o controle oculto aparece apagado, para poder ser reativado */
 #pad[data-editando] .oculto { visibility: visible; opacity: 0.25; }
+
+/* cadeado do grupo (como as alças, fica fora do pad) e estado destravado */
+.cadeado {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(20, 22, 30, 0.92);
+  border: 1.5px solid var(--accent);
+  pointer-events: auto;
+  touch-action: none;
+}
+.cadeado svg { width: 16px; height: 16px; fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
+.cadeado[aria-pressed="true"] { background: var(--accent); }
+.cadeado[aria-pressed="true"] svg { stroke: #0b0d14; }
+/* grupo destravado: o contorno do grupo fica pontilhado e cada botão passa a ser arrastável */
+#pad[data-editando] [data-solto] { outline-style: dotted; }
+#pad[data-editando] [data-solto] button { pointer-events: auto; outline: 1.5px dashed var(--accent); outline-offset: 2px; cursor: grab; }
