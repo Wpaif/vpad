@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { controlOffset, defaultLayout, isHidden } from "./layoutModel";
+import { controlOffset, defaultLayout, isHidden, withGroup } from "./layoutModel";
 import { LAYOUT_KEY } from "./layoutStorage";
 import { createLayoutStore } from "./layoutStore.svelte";
 
@@ -85,5 +85,37 @@ describe("layoutStore", () => {
     s.moveControl("B", { dx: 0.3 });
     s.restoreDefault();
     expect(s.current).toEqual(defaultLayout());
+  });
+
+  it("adopt troca o layout salvo (e a cópia local) quando não há edição", () => {
+    const s = createLayoutStore();
+    const remoto = withGroup(defaultLayout(), "face", { dx: 0.2 });
+    expect(s.adopt(remoto)).toBe(true);
+    expect(s.current.groups.face?.dx).toBe(0.2);
+    expect(createLayoutStore().current.groups.face?.dx).toBe(0.2);
+  });
+
+  it("adopt é recusado durante a edição, sem mexer no rascunho", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.move("menu", { dy: 0.1 });
+    expect(s.adopt(withGroup(defaultLayout(), "face", { dx: 0.2 }))).toBe(false);
+    expect(s.current.groups.face).toBeUndefined();
+    expect(s.current.groups.menu?.dy).toBe(0.1);
+  });
+
+  it("adopt do padrão apaga a cópia local", () => {
+    const s = createLayoutStore();
+    s.adopt(withGroup(defaultLayout(), "face", { dx: 0.2 }));
+    s.adopt(defaultLayout());
+    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
+    expect(s.current).toEqual(defaultLayout());
+  });
+
+  it("saved devolve o layout salvo, sem o rascunho", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.move("face", { dx: 0.3 });
+    expect(s.saved).toEqual(defaultLayout());
   });
 });

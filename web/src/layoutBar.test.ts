@@ -8,6 +8,7 @@ let store: LayoutStore;
 let bar: HTMLElement;
 let edit: HTMLButtonElement;
 let onChange: ReturnType<typeof vi.fn<() => void>>;
+let onSaved: ReturnType<typeof vi.fn<() => void>>;
 const act = (name: string) => bar.querySelector<HTMLButtonElement>(`[data-act=${name}]`)!;
 
 beforeEach(() => {
@@ -22,7 +23,8 @@ beforeEach(() => {
   edit = document.getElementById("edit") as HTMLButtonElement;
   store = createLayoutStore();
   onChange = vi.fn<() => void>();
-  mountLayoutBar({ bar, editButton: edit, store, onChange });
+  onSaved = vi.fn<() => void>();
+  mountLayoutBar({ bar, editButton: edit, store, onChange, onSaved });
 });
 
 describe("layoutBar", () => {
@@ -82,5 +84,26 @@ describe("layoutBar", () => {
     act("save").click();
     expect(bar.querySelector("[data-note]")!.textContent).toBe("");
     expect(bar.hidden).toBe(true);
+  });
+
+  it("salvar com sucesso avisa para o layout ir ao PC", () => {
+    edit.click();
+    store.move("face", { dx: 0.1 });
+    act("save").click();
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancelar, restaurar e salvar que falha não avisam", () => {
+    edit.click();
+    store.move("face", { dx: 0.1 });
+    act("reset").click();
+    act("cancel").click();
+    edit.click();
+    store.move("face", { dx: 0.1 });
+    const falha = () => { throw new Error("cheio"); };
+    vi.stubGlobal("localStorage", { getItem: falha, setItem: falha, removeItem: falha });
+    act("save").click();
+    vi.unstubAllGlobals();
+    expect(onSaved).not.toHaveBeenCalled();
   });
 });

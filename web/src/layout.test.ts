@@ -111,3 +111,13 @@ describe("lista de botões na página", () => {
     expect(list.hidden).toBe(true);
   });
 });
+
+describe("estado do layout no PC, na página", () => {
+  it("o painel tem o texto de estado, que começa vazio", () => {
+    const note = document.getElementById("layout-sync");
+    expect(note).not.toBeNull();
+    expect(document.getElementById("stats")!.contains(note)).toBe(true);
+    expect(note!.textContent).toBe("");
+    expect(note!.getAttribute("role")).toBe("status");
+  });
+});

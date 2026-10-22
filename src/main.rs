@@ -9,6 +9,7 @@ use tokio::sync::{mpsc, watch};
 use vpad::{
     acesso::Acesso,
     armazem::{ArmazemMapa, caminho_da_config},
+    layout::{ArmazemLayout, caminho_do_layout},
     cli::tabela_de_dispositivos,
     configuracao::{Configuracao, ServidorDeConfiguracao},
     console::{Console, DURACAO_DA_CONFIGURACAO, DURACAO_DO_PAREAMENTO, Saida},
@@ -123,6 +124,14 @@ async fn main() -> io::Result<()> {
             ArmazemMapa::com_arquivo(arquivo)
         }
         None => ArmazemMapa::em_memoria(),
+    });
+
+    let layout = Arc::new(match caminho_do_layout(xdg.as_deref(), home.as_deref()) {
+        Some(arquivo) => {
+            println!("layout dos botões salvo em {}", arquivo.display());
+            ArmazemLayout::com_arquivo(arquivo)
+        }
+        None => ArmazemLayout::em_memoria(),
     });
 
     let fabrica: Fabrica = {
@@ -240,5 +249,5 @@ async fn main() -> io::Result<()> {
         println!("\r\x1b[2Kaviso: sem entrada de terminal; o pareamento só abre com a opção --parear");
     });
 
-    https::servir(listener_https, tls_config, vpad::app_com(tx, perfil_rx, armazem, acesso)).await
+    https::servir(listener_https, tls_config, vpad::app_completo(tx, perfil_rx, armazem, layout, acesso)).await
 }

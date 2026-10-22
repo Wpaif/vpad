@@ -1,4 +1,4 @@
-//! API HTTP do modo teclado: `GET /api/teclado` e `PUT /api/teclado`.
+//! API HTTP: o modo teclado (`/api/teclado`), o layout dos botões (`/api/layout`) e o pareamento.
 
 use axum::{
     Json,
@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use crate::{
     Estado,
     acesso::Pareamento_,
+    layout::ErroLayout,
     mapa::{Controle, Mapa},
     teclas::TECLAS,
 };
@@ -37,6 +38,33 @@ pub(crate) fn exigir_teclado(estado: &Estado, headers: &HeaderMap) -> Result<(),
             "este aparelho não tem permissão para o modo teclado: libere no PC com vpad --permitir-teclado <id>",
         )),
         Some(_) => Ok(()),
+    }
+}
+
+/// Exige só um token de aparelho pareado (sem a permissão do modo teclado): o layout dos botões
+/// não digita nada no PC. Devolve a resposta de erro pronta se não passar.
+pub(crate) fn exigir_pareado(estado: &Estado, headers: &HeaderMap) -> Result<(), Response> {
+    match token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t, agora())) {
+        Some(_) => Ok(()),
+        None => Err(erro(StatusCode::UNAUTHORIZED, "não autorizado")),
+    }
+}
+
+/// O layout guardado no PC, ou `null` se nenhum aparelho salvou um ainda.
+pub(crate) async fn obter_layout(State(estado): State<Estado>) -> Response {
+    Json(json!({ "layout": estado.layout.atual() })).into_response()
+}
+
+#[derive(Deserialize)]
+pub(crate) struct PedidoLayout {
+    layout: serde_json::Value,
+}
+
+pub(crate) async fn definir_layout(State(estado): State<Estado>, Json(pedido): Json<PedidoLayout>) -> Response {
+    match estado.layout.definir(&pedido.layout) {
+        Ok(salvo) => Json(json!({ "layout": salvo })).into_response(),
+        Err(ErroLayout::Invalido(e)) => erro(StatusCode::BAD_REQUEST, e),
+        Err(ErroLayout::Disco(e)) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
     }
 }
 

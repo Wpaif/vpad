@@ -28,6 +28,8 @@ import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
 import { mountLayoutBar } from "./layoutBar";
 import { mountHideList } from "./layoutHideList";
 import { mountLayoutEditor } from "./layoutEditor";
+import { createLayoutSync } from "./layoutSync";
+import { renderSyncNote } from "./layoutSyncNote";
 
 const layoutStore = createLayoutStore();
 mount(Pad, {
@@ -137,11 +139,25 @@ function start(token: string) {
     }
   });
 
+  // O layout também fica guardado no PC: sobrevive a reinstalar o app da Tela de Início.
+  const syncNote = document.getElementById("layout-sync")!;
+  const layoutSync = createLayoutSync({
+    store: layoutStore,
+    token,
+    onState: (state) => renderSyncNote(syncNote, state),
+  });
+  void layoutSync.start();
+  window.addEventListener("online", () => void layoutSync.refresh());
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void layoutSync.refresh();
+  });
+
   // Modo edição: o painel fecha, a barra aparece e os grupos podem ser arrastados.
   mountLayoutBar({
     bar: document.getElementById("layout-bar")!,
     editButton: document.getElementById("edit-layout")!,
     store: layoutStore,
+    onSaved: () => void layoutSync.saved(),
     onChange: () => {
       void layoutEditor.refresh();
       hideList.sync();
