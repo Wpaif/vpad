@@ -61,6 +61,21 @@ async fn serve_o_icone_para_a_tela_inicial_do_iphone() {
 }
 
 #[tokio::test]
+async fn serve_todos_os_icones_do_app() {
+    for (caminho, tipo) in [
+        ("/icon.svg", "image/svg+xml"),
+        ("/favicon-32.png", "image/png"),
+        ("/icon-192.png", "image/png"),
+        ("/icon-512.png", "image/png"),
+        ("/apple-touch-icon.png", "image/png"),
+    ] {
+        let res = get(caminho).await;
+        assert_eq!(res.status(), StatusCode::OK, "{caminho}");
+        assert_eq!(res.headers()[header::CONTENT_TYPE], tipo, "{caminho}");
+    }
+}
+
+#[tokio::test]
 async fn toda_resposta_traz_cabecalhos_de_seguranca() {
     for path in ["/", "/index.html", "/manifest.webmanifest", "/nao-existe.js"] {
         let res = get(path).await;
