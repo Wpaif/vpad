@@ -253,8 +253,13 @@ make audit     # dependências Rust contra o RustSec (precisa de: cargo install 
 make check     # test + audit
 ```
 
-- Depois de mudar a página, rode `npm run build` em `web/` e reinicie o servidor (`cargo run`
-  em debug lê `web/dist` do disco).
+- Página em modo de desenvolvimento (recarrega ao editar): com o servidor rodando, `cd web && npm run dev`
+  e abra `http://localhost:5173`. O Vite repassa o WebSocket e a API ao HTTPS do servidor (porta
+  8443; para outra porta, `VPAD_PORTA_HTTPS=18443 npm run dev`) e a pareação funciona normalmente.
+  É só para desenvolver: a página fica em HTTP (sem modo app/tela cheia do iPhone), o proxy
+  reescreve a `Origin` para a que o servidor aceita, e o Vite escuta na rede local.
+- Para o que vai de verdade ao celular, rode `npm run build` em `web/` e reinicie o servidor
+  (`cargo run` em debug lê `web/dist` do disco).
 - Verificação de tipos: `cd web && npm run check`.
 - Os testes que injetam entrada de verdade na sessão ficam marcados com `#[ignore]` e usam só
   teclas modificadoras: `cargo test -- --ignored`.
