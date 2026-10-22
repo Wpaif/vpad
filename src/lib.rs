@@ -13,6 +13,7 @@ pub mod https;
 pub mod idiomas;
 pub mod layout;
 pub mod mapa;
+pub mod mensagens;
 pub mod mobileconfig;
 pub mod pareamento;
 pub mod mapeamento;
