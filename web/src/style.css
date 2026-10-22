@@ -67,7 +67,7 @@ html, body {
 }
 .zone.left { grid-template-areas: "sh sh" "stick dpad"; justify-content: start; }
 .zone.right { grid-template-areas: "sh sh" "stick face"; justify-content: end; }
-.zone.center { align-self: end; display: flex; flex-direction: column; align-items: stretch; width: 88px; padding-bottom: 8px; }
+.zone.center { align-self: end; display: flex; flex-direction: row; align-items: center; padding-bottom: 8px; }
 
 .shoulders { grid-area: sh; }
 .zone.left .stick { grid-area: stick; align-self: start; }
@@ -108,6 +108,12 @@ button[data-pressed] {
   letter-spacing: 0.1em;
 }
 .pill[data-symbol] { font-size: 20px; letter-spacing: 0; }
+/* em telas estreitas Select e Start lado a lado precisam de menos largura, ou empurram as laterais */
+@media (max-width: 760px) {
+  .zone.center { gap: 4px; }
+  .pill { padding: 0 7px; font-size: 10px; letter-spacing: 0.04em; }
+  .pill[data-symbol] { font-size: 16px; }
+}
 
 .dpad {
   --s: calc(var(--btn) * 0.82);
