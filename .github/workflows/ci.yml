@@ -57,6 +57,22 @@ jobs:
       # sem /dev/uinput (runner do GitHub) os testes do dispositivo virtual se pulam sozinhos
       - run: cargo test --locked
 
+  # Os mesmos testes do Rust num runner ARM nativo (o projeto não tem código específico de
+  # arquitetura; isto garante que continua assim). Não é check obrigatório da master.
+  rust-arm:
+    name: rust-arm
+    needs: web
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked
+
   hooks:
     name: hooks
     runs-on: ubuntu-latest

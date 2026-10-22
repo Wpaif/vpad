@@ -61,9 +61,9 @@ reboot.
 
 ## Installation
 
-### Ready-made binary (Linux x86_64)
+### Ready-made binary (Linux x86_64 / aarch64)
 
-If you just want to use it, download the package from the [latest release](https://github.com/Wpaif/vpad/releases/latest) (`vpad-X.Y.Z-linux-x86_64.tar.gz`, with the `.sha256` next to it), check the checksum and extract it. You do not need Rust or Node, but the `uinput` setup from the [requirements](#requirements) is still needed. Then follow [first use](#first-use).
+If you just want to use it, download the package from the [latest release](https://github.com/Wpaif/vpad/releases/latest) (`vpad-X.Y.Z-linux-x86_64.tar.gz`, with the `.sha256` next to it), check the checksum and extract it. You do not need Rust or Node, but the `uinput` setup from the [requirements](#requirements) is still needed. Packages exist for **x86_64** (Intel/AMD) and **aarch64** (64-bit ARM, such as a Raspberry Pi 4/5 running a 64-bit system): on ARM, use the name with `aarch64` instead of `x86_64`. Then follow [first use](#first-use).
 
 ```sh
 sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256

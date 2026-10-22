@@ -87,4 +87,10 @@ describe("CHANGELOG", () => {
     expect(naoLancado).toMatch(/linux-x86_64/);
     expect(c).not.toMatch(/Não há binário pré-compilado/);
   });
+
+  it("o changelog registra o binário ARM em 'Não lançado'", () => {
+    const c = raiz("CHANGELOG.md");
+    const naoLancado = c.slice(c.indexOf("## [Não lançado]"), c.indexOf("## [0.1.0]"));
+    expect(naoLancado).toMatch(/aarch64/);
+  });
 });

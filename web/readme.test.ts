@@ -218,4 +218,10 @@ describe("binário pronto na instalação", () => {
     expect(md).toContain(".github/workflows/release.yml");
     expect(md).toMatch(/Run workflow/);
   });
+
+  it.each(IDIOMAS)("$arquivo: avisa que há pacote para ARM de 64 bits (aarch64)", ({ arquivo }) => {
+    const md = raiz(arquivo);
+    expect(md, arquivo).toContain("aarch64");
+    expect(md, arquivo).toMatch(/Raspberry Pi/);
+  });
 });

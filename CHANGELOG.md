@@ -12,6 +12,9 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - **Binário pré-compilado para Linux x86_64** (`vpad-X.Y.Z-linux-x86_64.tar.gz`, com o `.sha256`) anexado
   aos releases por um workflow (`.github/workflows/release.yml`), com a página embutida, a licença, o
   changelog e os README. O do `0.1.0` foi anexado logo depois do lançamento.
+- **Binário pré-compilado para ARM de 64 bits** (`vpad-X.Y.Z-linux-aarch64.tar.gz`, para o Raspberry Pi 4/5
+  com sistema de 64 bits e semelhantes), compilado nativamente num runner ARM. O CI passou a rodar também
+  os testes do Rust em ARM (job `rust-arm`).
 
 ## [0.1.0] - 2026-10-22
 
@@ -43,8 +46,8 @@ Primeira versão pública: um controle virtual no iPhone que cria um gamepad ou 
 ### Limitações conhecidas
 
 - Só **Linux** (testado no Manjaro) e **iPhone** (Safari ou app da Tela de Início); Windows não é suportado.
-- O binário pré-compilado só existe para Linux x86_64 (anexado ao release depois do lançamento); nos demais
-  casos é preciso compilar o servidor (Rust 1.85 ou mais novo) e a página (Node).
+- Os binários pré-compilados só existem para Linux x86_64 e aarch64 (anexados ao release depois do
+  lançamento); nos demais casos é preciso compilar o servidor (Rust 1.85 ou mais novo) e a página (Node).
 - As traduções em chinês, japonês e coreano e os nomes dos menus do iOS em cada idioma não passaram por
   revisão de falante nativo.
 - O layout dos botões é um só para todos os aparelhos pareados.
