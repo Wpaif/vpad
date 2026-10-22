@@ -131,3 +131,13 @@ describe("opacidade na barra de edição", () => {
     expect(input!.getAttribute("aria-label")).toBe("Opacidade dos botões");
   });
 });
+
+describe("seletor de idioma na página", () => {
+  it("o painel tem o seletor de idioma, com nome acessível", () => {
+    const select = document.getElementById("language-select");
+    expect(select?.tagName).toBe("SELECT");
+    expect(document.getElementById("stats")!.contains(select)).toBe(true);
+    expect(select!.getAttribute("aria-label")).toBe("Idioma");
+    expect(select!.getAttribute("data-i18n-aria-label")).toBe("language.label");
+  });
+});

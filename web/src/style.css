@@ -548,3 +548,15 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 .layout-opacity input { width: 84px; accent-color: var(--accent); }
 .layout-opacity output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .layout-opacity-label { display: none; } }
+
+/* seletor de idioma do painel */
+.language-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.language-row .label { margin: 0; }
+.language-row select {
+  min-width: 110px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: transparent;
+  color: inherit;
+}

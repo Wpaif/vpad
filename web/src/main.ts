@@ -25,6 +25,8 @@ import {
   renderStatus,
 } from "./ui";
 import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
+import { applyStaticTranslations, initLanguage } from "./i18n";
+import { mountLanguagePicker } from "./languagePicker";
 import { mountLayoutBar } from "./layoutBar";
 import { mountHideList } from "./layoutHideList";
 import { mountOpacitySlider } from "./layoutOpacity";
@@ -47,6 +49,11 @@ mount(Pad, {
 
 const storage = safeStorage();
 const pad = document.getElementById("pad")!;
+
+// O idioma vem antes de qualquer texto: o que o usuário escolheu, ou o do celular.
+initLanguage({ languages: navigator.languages?.length ? navigator.languages : [navigator.language], storage });
+applyStaticTranslations(document);
+mountLanguagePicker(document.getElementById("language-select") as HTMLSelectElement, storage);
 
 lockGestures();
 enterFullscreenOnTouch(document);
