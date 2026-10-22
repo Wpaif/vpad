@@ -70,6 +70,12 @@ pub struct Console {
     estado: Mutex<Estado>,
 }
 
+/// "Sim e liberar o modo teclado": `t` (de teclado) ou `k` (de keyboard), para quem usa o terminal
+/// em português ou em inglês.
+fn liberar_teclado(resposta: &str) -> bool {
+    matches!(resposta.trim().to_lowercase().as_str(), "t" | "teclado" | "k" | "keyboard")
+}
+
 fn afirmativa(resposta: &str) -> bool {
     matches!(resposta.trim().to_lowercase().as_str(), "s" | "sim" | "y" | "yes")
 }
@@ -98,10 +104,10 @@ impl Console {
         // Com um pedido esperando, a linha é a resposta a ele: negar é o padrão.
         if let Some(pedido) = self.acesso.aprovacoes().pendente() {
             let teclado = matches!(pedido.tipo, Tipo::Pareamento { .. })
-                && matches!(texto.trim().to_lowercase().as_str(), "t" | "teclado");
+                && liberar_teclado(texto);
             let (decisao, mensagem) = if teclado {
                 (Decisao::Aprovado { teclado: true }, "✓ aprovado, com o modo teclado liberado para o aparelho")
-            } else if afirmativa(texto) || matches!(pedido.tipo, Tipo::AtivarTeclado { .. }) && texto.trim().eq_ignore_ascii_case("t") {
+            } else if afirmativa(texto) || matches!(pedido.tipo, Tipo::AtivarTeclado { .. }) && liberar_teclado(texto) {
                 (Decisao::Aprovado { teclado: false }, "✓ aprovado")
             } else {
                 (Decisao::Negado, "pedido negado")
@@ -122,7 +128,7 @@ impl Console {
                 };
                 vec![Saida::Linha(aviso)]
             }
-            "f" => {
+            "f" | "fechar" | "close" => {
                 self.acesso.pareamento().fechar();
                 vec![Saida::Linha("pareamento fechado".to_string())]
             }
@@ -366,6 +372,46 @@ mod testes {
         let t = texto(&c.linha("t", T0));
         assert_eq!(tarefa.await.unwrap(), Ok(Decisao::Aprovado { teclado: true }));
         assert!(t.to_lowercase().contains("teclado"), "{t}");
+    }
+
+    #[tokio::test]
+    async fn k_e_keyboard_liberam_o_teclado_como_o_t_para_quem_usa_o_terminal_em_ingles() {
+        for resposta in ["t", "teclado", "k", "K", "keyboard", " Keyboard "] {
+            let (c, acesso, _) = console();
+            let tarefa = pedir(&acesso, pedido_de_pareamento("iPhone")).await;
+            c.linha(resposta, T0);
+            assert_eq!(tarefa.await.unwrap(), Ok(Decisao::Aprovado { teclado: true }), "{resposta:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn no_pedido_de_ativar_o_teclado_o_k_aprova_sem_liberar_nada_a_mais() {
+        for resposta in ["t", "k", "s", "y"] {
+            let (c, acesso, _) = console();
+            let pedido = Pedido { id: 0, tipo: Tipo::AtivarTeclado { nome: "iPhone".into() }, origem: None };
+            let tarefa = pedir(&acesso, pedido).await;
+            c.linha(resposta, T0);
+            assert_eq!(tarefa.await.unwrap(), Ok(Decisao::Aprovado { teclado: false }), "{resposta:?}");
+        }
+    }
+
+    #[test]
+    fn k_sem_pedido_nao_faz_nada_alem_de_mostrar_a_ajuda() {
+        let (c, acesso, _) = console();
+        let t = texto(&c.linha("k", T0));
+        assert!(!acesso.pareamento().aberto(T0));
+        assert!(t.contains("Enter"), "{t}");
+    }
+
+    #[test]
+    fn close_e_fechar_fecham_o_pareamento_como_o_f() {
+        for comando in ["f", "fechar", "close", " CLOSE "] {
+            let (c, acesso, _) = console();
+            c.linha("", T0);
+            assert!(acesso.pareamento().aberto(T0), "{comando:?}");
+            c.linha(comando, T0 + 1);
+            assert!(!acesso.pareamento().aberto(T0 + 1), "{comando:?}");
+        }
     }
 
     #[tokio::test]
