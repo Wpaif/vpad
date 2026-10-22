@@ -10,6 +10,7 @@ pub mod convite;
 pub mod dispositivo;
 pub mod dispositivos;
 pub mod https;
+pub mod layout;
 pub mod mapa;
 pub mod mobileconfig;
 pub mod pareamento;
