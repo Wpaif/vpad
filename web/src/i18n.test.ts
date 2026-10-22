@@ -186,6 +186,13 @@ describe("applyStaticTranslations", () => {
     expect(document.getElementById("d")!.textContent).toBe("Texto original");
   });
 
+  it("data-i18n-html traduz com marcação (negrito), vinda só do nosso catálogo", () => {
+    document.body.innerHTML = `<p id="h" data-i18n-html="language.label">x</p>`;
+    setLanguage("en");
+    applyStaticTranslations(document);
+    expect(document.getElementById("h")!.innerHTML).toBe(CATALOGS.en["language.label"]);
+  });
+
   it("em português deixa tudo como está", () => {
     applyStaticTranslations(document);
     expect(document.getElementById("a")!.textContent).toBe(ptBR["language.label"]);

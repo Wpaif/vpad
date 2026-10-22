@@ -88,13 +88,18 @@ export function t(key: Key, params: Record<string, string | number> = {}): strin
 const hasKey = (key: string | null): key is Key => key !== null && key in ptBR;
 
 /**
- * Traduz o que o markup marcou: `data-i18n` (conteúdo), `data-i18n-aria-label`, `data-i18n-title`
- * e `data-i18n-placeholder`. O texto escrito no markup continua valendo se a chave não existir.
+ * Traduz o que o markup marcou: `data-i18n` (conteúdo), `data-i18n-html` (conteúdo com negrito),
+ * `data-i18n-aria-label`, `data-i18n-title` e `data-i18n-placeholder`. O texto escrito no markup continua valendo se a chave não existir.
  */
 export function applyStaticTranslations(root: ParentNode): void {
   for (const el of root.querySelectorAll<HTMLElement>("[data-i18n]")) {
     const key = el.getAttribute("data-i18n");
     if (hasKey(key)) el.textContent = t(key);
+  }
+  // `data-i18n-html` é para os textos com negrito: o HTML vem do catálogo (nosso), nunca do usuário
+  for (const el of root.querySelectorAll<HTMLElement>("[data-i18n-html]")) {
+    const key = el.getAttribute("data-i18n-html");
+    if (hasKey(key)) el.innerHTML = t(key);
   }
   for (const attr of ["aria-label", "title", "placeholder"]) {
     for (const el of root.querySelectorAll<HTMLElement>(`[data-i18n-${attr}]`)) {
