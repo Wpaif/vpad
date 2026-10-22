@@ -102,5 +102,6 @@ export const ja: Record<Key, string> = {
   "pairing.waiting": "コードが正しければ、PC でリクエストを承認してください。ターミナルに表示されます。",
   "pairing.error.fallback": "ペアリングできませんでした。",
   "profiles.keyboard": "キーボード",
+  "profiles.keyboard.short": "キー",
   "pad.aria": "仮想コントローラー",
 };

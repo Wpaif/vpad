@@ -102,5 +102,6 @@ export const ko: Record<Key, string> = {
   "pairing.waiting": "코드가 맞다면 PC에서 요청을 승인하세요. 터미널에 표시됩니다.",
   "pairing.error.fallback": "페어링하지 못했습니다.",
   "profiles.keyboard": "키보드",
+  "profiles.keyboard.short": "키보드",
   "pad.aria": "가상 컨트롤러",
 };

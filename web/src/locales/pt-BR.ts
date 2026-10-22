@@ -105,6 +105,7 @@ export const ptBR = {
   "pairing.waiting": "Se o código estiver certo, aprove o pedido no PC: ele aparece no terminal.",
   "pairing.error.fallback": "Não consegui parear.",
   "profiles.keyboard": "Teclado",
+  "profiles.keyboard.short": "Teclado",
   "pad.aria": "Controle virtual",
 } as const;
 

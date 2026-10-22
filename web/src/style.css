@@ -241,6 +241,12 @@ button[data-pressed] {
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   font-size: 12px;
+  /* em telas baixas o painel rola em vez de passar do fim da tela */
+  max-height: calc(var(--app-h, 100dvh) - max(10px, env(safe-area-inset-top)) - 52px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.3) transparent;
 }
 .stats[hidden] { display: none; }
 .stats dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; margin: 0; }

@@ -141,3 +141,9 @@ describe("seletor de idioma na página", () => {
     expect(select!.getAttribute("data-i18n-aria-label")).toBe("language.label");
   });
 });
+
+describe("painel de latência rola quando não cabe", () => {
+  it("o painel é uma área de rolagem (data-scroll libera o gesto de rolar no iPhone)", () => {
+    expect(document.getElementById("stats")!.hasAttribute("data-scroll")).toBe(true);
+  });
+});

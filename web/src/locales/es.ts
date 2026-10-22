@@ -102,5 +102,6 @@ export const es: Record<Key, string> = {
   "pairing.waiting": "Si el código es correcto, aprueba la solicitud en el PC: aparece en el terminal.",
   "pairing.error.fallback": "No pude emparejar.",
   "profiles.keyboard": "Teclado",
+  "profiles.keyboard.short": "Teclado",
   "pad.aria": "Mando virtual",
 };

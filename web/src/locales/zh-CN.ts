@@ -102,5 +102,6 @@ export const zhCN: Record<Key, string> = {
   "pairing.waiting": "如果代码正确，请在 PC 上批准请求：它会显示在终端中。",
   "pairing.error.fallback": "无法配对。",
   "profiles.keyboard": "键盘",
+  "profiles.keyboard.short": "键盘",
   "pad.aria": "虚拟手柄",
 };

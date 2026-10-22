@@ -102,5 +102,6 @@ export const en: Record<Key, string> = {
   "pairing.waiting": "If the code is right, approve the request on the PC: it appears in the terminal.",
   "pairing.error.fallback": "Could not pair.",
   "profiles.keyboard": "Keyboard",
+  "profiles.keyboard.short": "Keys",
   "pad.aria": "Virtual controller",
 };

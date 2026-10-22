@@ -72,6 +72,7 @@ describe("os módulos traduzem na hora do uso (e não ao carregar)", () => {
     expect(describeNotice("no-permission", "0123abcd")).toBe(c["notice.noPermissionWithId"]!.replace("{id}", "0123abcd"));
 
     expect(PROFILES.find((p) => p.id === "teclado")!.label).toBe(c["profiles.keyboard"]);
+    expect(PROFILES.find((p) => p.id === "teclado")!.short).toBe(c["profiles.keyboard.short"]);
     expect(PROFILES.find((p) => p.id === "xbox360")!.label).toBe("Xbox 360");
 
     expect(groupName("Direcional")).toBe(c["controls.group.dpad"]);

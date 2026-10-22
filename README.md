@@ -8,6 +8,8 @@ manda os toques pela rede local, e um servidor em Rust no PC cria um **gamepad o
 - **Multi-toque**, analógicos virtuais, gatilhos e direcional, em paisagem e tela cheia.
 - **Latência à vista**: medidor com ping/pong e, se o Wi-Fi do celular "dormir", um modo de ping curto.
 - **Layout dos botões editável**: mover, redimensionar, ocultar e soltar botões um a um.
+- **Seis idiomas**: português, inglês, espanhol, chinês (simplificado), japonês e coreano, escolhidos
+  pelo idioma do celular ou no painel.
 - **Seguro para a rede local**: HTTPS com autoridade própria, pareamento por código e aprovação no PC.
 
 > Alvo atual: **Linux** (testado no Manjaro) e **iPhone** (Safari / app da Tela de Início).
@@ -109,6 +111,8 @@ Com o servidor rodando, abra o app no iPhone. Ele reconecta sozinho se o Wi-Fi c
   perfil, as estatísticas (último, média, mínimo, máximo, jitter, perda), o botão de ping curto
   e o acesso ao editor de layout.
 - **Olho** (topo): oculta ou mostra os controles.
+- **Idioma**: o painel tem um seletor com os seis idiomas. Na primeira abertura vale o idioma do
+  celular (quem fala uma língua sem tradução recebe o inglês); trocar recarrega a página.
 - **Ping curto**: se a latência sobe quando você fica sem tocar, é o Wi-Fi do iPhone entrando em
   economia de energia. Ligar o *ping curto* manda um aviso a cada 100 ms e mantém o rádio
   acordado (gasta mais bateria do celular).

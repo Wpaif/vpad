@@ -21,7 +21,7 @@ export const PROFILES: readonly Profile[] = [
       return t("profiles.keyboard");
     },
     get short() {
-      return t("profiles.keyboard");
+      return t("profiles.keyboard.short");
     },
   },
 ];
