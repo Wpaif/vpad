@@ -8,6 +8,7 @@ let panel: HTMLElement;
 let opener: HTMLButtonElement;
 let onChange: ReturnType<typeof vi.fn<() => void>>;
 let list: { sync: () => void };
+let rotulos: Record<string, string | null>;
 
 const chip = (id: string) => panel.querySelector<HTMLElement>(`[data-control=${id}]`)!;
 
@@ -18,7 +19,8 @@ beforeEach(() => {
   opener = document.getElementById("op") as HTMLButtonElement;
   store = createLayoutStore();
   onChange = vi.fn<() => void>();
-  list = mountHideList({ panel, opener, store, onChange });
+  rotulos = {};
+  list = mountHideList({ panel, opener, store, onChange, labelOf: (id) => rotulos[id] ?? null });
 });
 
 describe("layoutHideList", () => {
@@ -88,5 +90,37 @@ describe("layoutHideList", () => {
     store.edit();
     list.sync();
     expect(panel.hidden).toBe(true); // reabrir exige clicar de novo
+  });
+});
+
+describe("nomes seguem o controle em uso", () => {
+  it("usa o rótulo do perfil quando existe e o nome padrão quando não", () => {
+    rotulos = { A: "Cruz", LT: "L2", Select: null };
+    list.sync();
+    expect(chip("A").textContent).toBe("Cruz");
+    expect(chip("LT").textContent).toBe("L2");
+    expect(chip("Select").textContent).toBe("Select");
+    expect(chip("Up").textContent).toBe("Cima");
+  });
+
+  it("troca os nomes quando o perfil muda (sync de novo)", () => {
+    rotulos = { A: "Cruz" };
+    list.sync();
+    rotulos = { A: "B" };
+    list.sync();
+    expect(chip("A").textContent).toBe("B");
+  });
+
+  it("abrir a lista já mostra os nomes atuais", () => {
+    store.edit();
+    rotulos = { X: "Quadrado" };
+    opener.click();
+    expect(chip("X").textContent).toBe("Quadrado");
+  });
+
+  it("o nome acessível do interruptor continua sendo o rótulo atual", () => {
+    rotulos = { Y: "Triângulo" };
+    list.sync();
+    expect(chip("Y").getAttribute("aria-label")).toBe("Triângulo");
   });
 });

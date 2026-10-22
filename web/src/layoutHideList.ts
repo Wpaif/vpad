@@ -15,13 +15,15 @@ interface Options {
   store: LayoutStore;
   /** chamado quando um interruptor muda o rascunho */
   onChange?: () => void;
+  /** nome que o controle tem agora (segue o perfil); null usa o nome padrão daqui */
+  labelOf?: (id: ControlId) => string | null;
 }
 
 /**
  * Lista de controles para ocultar um a um (só em modo edição). Cada interruptor diz se o
  * controle está visível; `sync` o relê do store e fecha a lista quando a edição acaba.
  */
-export function mountHideList({ panel, opener, store, onChange }: Options): { sync: () => void } {
+export function mountHideList({ panel, opener, store, onChange, labelOf }: Options): { sync: () => void } {
   let open = false;
   const chips = new Map<ControlId, HTMLElement>();
 
@@ -30,7 +32,6 @@ export function mountHideList({ panel, opener, store, onChange }: Options): { sy
     chip.type = "button";
     chip.dataset.control = id;
     chip.setAttribute("role", "switch");
-    chip.textContent = NAMES[id];
     chip.addEventListener("click", () => {
       if (!store.editing) return;
       store.hide(id, !isHidden(store.current, id));
@@ -44,7 +45,12 @@ export function mountHideList({ panel, opener, store, onChange }: Options): { sy
   const sync = () => {
     if (!store.editing) open = false;
     panel.hidden = !open;
-    for (const [id, chip] of chips) chip.setAttribute("aria-checked", String(!isHidden(store.current, id)));
+    for (const [id, chip] of chips) {
+      const name = labelOf?.(id) ?? NAMES[id];
+      chip.textContent = name;
+      chip.setAttribute("aria-label", name);
+      chip.setAttribute("aria-checked", String(!isHidden(store.current, id)));
+    }
   };
 
   opener.addEventListener("click", () => {
