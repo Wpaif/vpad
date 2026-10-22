@@ -1,7 +1,7 @@
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Pad from "./Pad.svelte";
-import { defaultLayout, setHidden, withGroup, type Layout } from "./layoutModel";
+import { defaultLayout, setHidden, withControl, withGroup, type Layout } from "./layoutModel";
 
 let app: ReturnType<typeof mount>;
 let pad: HTMLElement;
@@ -134,5 +134,35 @@ describe("Pad em edição", () => {
     app = mount(Pad, { target: document.getElementById("app")!, props: { editing: true } });
     pad = document.getElementById("pad")!;
     expect(pad.hasAttribute("data-editando")).toBe(true);
+  });
+});
+
+describe("Pad com controle solto", () => {
+  const montar = (layout: Layout) => {
+    unmount(app);
+    document.body.innerHTML = `<div id="app"></div>`;
+    app = mount(Pad, { target: document.getElementById("app")!, props: { layout } });
+    pad = document.getElementById("pad")!;
+  };
+  const btn = (id: string) => pad.querySelector<HTMLElement>(`[data-btn=${id}]`)!;
+
+  it("sem deslocamento individual nenhum controle recebe translate", () => {
+    for (const b of pad.querySelectorAll<HTMLElement>("[data-btn], [data-trigger]")) {
+      expect(b.style.getPropertyValue("translate")).toBe("");
+    }
+  });
+
+  it("controle deslocado usa a propriedade translate, que não atrapalha o transform do toque", () => {
+    montar(withControl(defaultLayout(), "A", { dx: 0.1, dy: -0.05 }));
+    const t = btn("A").style.getPropertyValue("translate");
+    expect(t).toContain("--app-w");
+    expect(t).toContain("--app-h");
+    expect(btn("A").style.transform).toBe("");
+    expect(btn("B").style.getPropertyValue("translate")).toBe("");
+  });
+
+  it("vale também para gatilhos (LT/RT)", () => {
+    montar(withControl(defaultLayout(), "LT", { dx: 0.02 }));
+    expect(pad.querySelector<HTMLElement>("[data-trigger=LT]")!.style.getPropertyValue("translate")).toContain("--app-w");
   });
 });

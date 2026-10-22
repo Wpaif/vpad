@@ -2,7 +2,9 @@ import {
   defaultLayout,
   resetGroup,
   setHidden,
+  withControl,
   withGroup,
+  type ControlAdjust,
   type ControlId,
   type GroupAdjust,
   type GroupId,
@@ -31,6 +33,10 @@ export function createLayoutStore() {
     },
     move(group: GroupId, patch: Partial<GroupAdjust>) {
       change((l) => withGroup(l, group, patch));
+    },
+    /** Move um controle sozinho (o grupo dele está destravado na tela). */
+    moveControl(control: ControlId, patch: Partial<ControlAdjust>) {
+      change((l) => withControl(l, control, patch));
     },
     resetGroup(group: GroupId) {
       change((l) => resetGroup(l, group));

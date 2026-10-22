@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { defaultLayout, isHidden } from "./layoutModel";
+import { controlOffset, defaultLayout, isHidden } from "./layoutModel";
 import { LAYOUT_KEY } from "./layoutStorage";
 import { createLayoutStore } from "./layoutStore.svelte";
 
@@ -56,6 +56,34 @@ describe("layoutStore", () => {
   it("alterar fora do modo edição não faz nada", () => {
     const s = createLayoutStore();
     s.move("face", { dx: 0.5 });
+    expect(s.current).toEqual(defaultLayout());
+  });
+
+  it("moveControl mexe no rascunho, salva e cancela como o resto", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.moveControl("A", { dx: 0.1, dy: 0.2 });
+    expect(controlOffset(s.current, "A")).toEqual({ dx: 0.1, dy: 0.2 });
+    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
+    s.cancel();
+    expect(controlOffset(s.current, "A")).toEqual({ dx: 0, dy: 0 });
+    s.edit();
+    s.moveControl("A", { dx: 0.1 });
+    s.save();
+    expect(controlOffset(createLayoutStore().current, "A").dx).toBe(0.1);
+  });
+
+  it("moveControl fora do modo edição não faz nada", () => {
+    const s = createLayoutStore();
+    s.moveControl("A", { dx: 0.5 });
+    expect(s.current).toEqual(defaultLayout());
+  });
+
+  it("restaurar o padrão também zera os deslocamentos individuais", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.moveControl("B", { dx: 0.3 });
+    s.restoreDefault();
     expect(s.current).toEqual(defaultLayout());
   });
 });
