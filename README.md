@@ -306,6 +306,11 @@ também são traduzidos na página (`web/src/keyNames.ts`).
 Fluxo de trabalho do projeto: uma branch por funcionalidade (`feature/<nome>`), testes escritos
 antes da implementação, e merge na `master` só com os testes passando.
 
+A `master` também é **protegida no GitHub**: só recebe mudanças por pull request (sem exigir
+aprovação, porque o projeto tem um autor), não aceita force push nem exclusão, e a regra vale até
+para administradores. O fluxo é `git push -u origin feature/<nome>`, `gh pr create --fill` e, com os
+testes passando, `gh pr merge --merge` (merge commit, como nos merges locais).
+
 O repositório bloqueia **commit direto na `master`** (hook `.githooks/pre-commit`): o trabalho entra
 por uma branch e chega na `master` por merge, que o hook não atrapalha. Depois de clonar, instale-o
 uma vez com `make hooks` (ele é copiado para `.git/hooks`; rode de novo se o arquivo mudar). Numa
