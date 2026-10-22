@@ -1,5 +1,8 @@
 # vpad
 
+[![CI](https://github.com/Wpaif/vpad/actions/workflows/ci.yml/badge.svg)](https://github.com/Wpaif/vpad/actions/workflows/ci.yml)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+
 Controle virtual para o PC, no celular. O iPhone abre uma página (ou um app na Tela de Início),
 manda os toques pela rede local, e um servidor em Rust no PC cria um **gamepad ou teclado virtual**
 (uinput, Linux) que qualquer jogo ou programa enxerga como um dispositivo de verdade.
@@ -57,8 +60,16 @@ que sobreviva a reiniciar o PC.
 
 ## Instalação
 
-Na pasta do projeto. A página fica **embutida no binário** (em compilação de release; em debug o
-servidor lê `web/dist` do disco), então compile a página antes do servidor:
+Baixe o projeto e entre na pasta:
+
+```sh
+git clone https://github.com/Wpaif/vpad.git
+# ou, com SSH: git clone git@github.com:Wpaif/vpad.git
+cd vpad
+```
+
+A página fica **embutida no binário** (em compilação de release; em debug o servidor lê `web/dist`
+do disco), então compile a página antes do servidor:
 
 ```sh
 cd web && npm install && npm run build && cd ..
@@ -310,6 +321,12 @@ A `master` também é **protegida no GitHub**: só recebe mudanças por pull req
 aprovação, porque o projeto tem um autor), não aceita force push nem exclusão, e a regra vale até
 para administradores. O fluxo é `git push -u origin feature/<nome>`, `gh pr create --fill` e, com os
 testes passando, `gh pr merge --merge` (merge commit, como nos merges locais).
+
+O **CI** (GitHub Actions, `.github/workflows/ci.yml`) roda em todo pull request e em todo push na
+`master`, com três jobs: `web` (checagem de tipos, build e testes da página), `rust` (`cargo test
+--locked`; no runner do GitHub não há `/dev/uinput`, então os testes do dispositivo virtual se pulam
+sozinhos) e `hooks` (o teste do hook abaixo). A `master` só aceita o merge com os três verdes.
+Localmente, o equivalente é `make test`.
 
 O repositório bloqueia **commit direto na `master`** (hook `.githooks/pre-commit`): o trabalho entra
 por uma branch e chega na `master` por merge, que o hook não atrapalha. Depois de clonar, instale-o
