@@ -26,6 +26,7 @@ import {
 } from "./ui";
 import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
 import { mountLayoutBar } from "./layoutBar";
+import { mountHideList } from "./layoutHideList";
 import { mountLayoutEditor } from "./layoutEditor";
 
 const layoutStore = createLayoutStore();
@@ -142,10 +143,16 @@ function start(token: string) {
     store: layoutStore,
     onChange: () => {
       void layoutEditor.refresh();
+      hideList.sync();
       if (!layoutStore.editing) return;
       statsEl.hidden = true;
       clearInterval(refresh);
     },
+  });
+  const hideList = mountHideList({
+    panel: document.getElementById("hide-list")!,
+    opener: document.querySelector<HTMLElement>("#layout-bar [data-act=buttons]")!,
+    store: layoutStore,
   });
   const guia = (eixo: "x" | "y") => {
     const el = document.createElement("div");
