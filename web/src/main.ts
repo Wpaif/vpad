@@ -8,7 +8,7 @@ import { mountKeyEditor } from "./editor";
 import { bindInstallHint, enterFullscreenOnTouch } from "./fullscreen";
 import { createLayoutStore } from "./layoutStore.svelte";
 import { loadKeyboard, saveKeyboard, type KeyboardConfig } from "./keyboard";
-import { applyKeyboardLabels, applyProfileLabels } from "./labels";
+import { applyKeyboardLabels, applyProfileLabels, displayedLabel } from "./labels";
 import { createLatencyMeter } from "./latency";
 import { deviceName, mountPairing, pairDevice } from "./pairing";
 import { describeNotice } from "./notice";
@@ -26,6 +26,7 @@ import {
 } from "./ui";
 import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
 import { mountLayoutBar } from "./layoutBar";
+import { mountHideList } from "./layoutHideList";
 import { mountLayoutEditor } from "./layoutEditor";
 
 const layoutStore = createLayoutStore();
@@ -99,6 +100,7 @@ function start(token: string) {
         })
         .catch(() => {});
     }
+    hideList.sync(); // a lista de ocultar mostra os nomes do controle em uso
   }
 
   const editor = mountKeyEditor(document.getElementById("key-editor")!, {
@@ -142,10 +144,17 @@ function start(token: string) {
     store: layoutStore,
     onChange: () => {
       void layoutEditor.refresh();
+      hideList.sync();
       if (!layoutStore.editing) return;
       statsEl.hidden = true;
       clearInterval(refresh);
     },
+  });
+  const hideList = mountHideList({
+    panel: document.getElementById("hide-list")!,
+    opener: document.querySelector<HTMLElement>("#layout-bar [data-act=buttons]")!,
+    store: layoutStore,
+    labelOf: (id) => displayedLabel(pad, id),
   });
   const guia = (eixo: "x" | "y") => {
     const el = document.createElement("div");

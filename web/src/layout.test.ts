@@ -102,3 +102,12 @@ describe("editor de layout na página", () => {
     }
   });
 });
+
+describe("lista de botões na página", () => {
+  it("a barra tem o botão que abre a lista, e a lista começa escondida", () => {
+    const bar = document.getElementById("layout-bar")!;
+    expect(bar.querySelector("button[data-act=buttons]")).not.toBeNull();
+    const list = document.getElementById("hide-list")!;
+    expect(list.hidden).toBe(true);
+  });
+});

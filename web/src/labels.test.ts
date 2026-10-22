@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { applyKeyboardLabels, applyProfileLabels } from "./labels";
+import { applyKeyboardLabels, applyProfileLabels, displayedLabel } from "./labels";
 import { montarPagina } from "./testing/pagina";
 
 let pad: HTMLElement;
@@ -189,5 +189,54 @@ describe("modo teclado", () => {
     applyKeyboardLabels(pad, { Up: "KeyK" }, teclas);
     expect(el(".dpad").innerHTML).toBe(dpad);
     expect(el(".face .top").dataset.btn).toBe("Y");
+  });
+});
+
+describe("displayedLabel (o nome que o botão tem agora)", () => {
+  const teclas = [
+    { id: "KeyK", rotulo: "K", grupo: "Letras" },
+    { id: "Space", rotulo: "Espaço", grupo: "Especiais" },
+  ];
+
+  it("Xbox: o texto do botão", () => {
+    applyProfileLabels(pad, "xbox360");
+    expect(displayedLabel(pad, "A")).toBe("A");
+    expect(displayedLabel(pad, "Select")).toBe("Back");
+    expect(displayedLabel(pad, "LT")).toBe("LT");
+  });
+
+  it("DualShock: formas pelo nome acessível, ombros como L1/R2", () => {
+    applyProfileLabels(pad, "ds4");
+    expect(displayedLabel(pad, "A")).toBe("Cruz");
+    expect(displayedLabel(pad, "B")).toBe("Círculo");
+    expect(displayedLabel(pad, "X")).toBe("Quadrado");
+    expect(displayedLabel(pad, "Y")).toBe("Triângulo");
+    expect(displayedLabel(pad, "LB")).toBe("L1");
+    expect(displayedLabel(pad, "RT")).toBe("R2");
+    expect(displayedLabel(pad, "Start")).toBe("Options");
+  });
+
+  it("Switch Pro: o botão de baixo (id A) chama-se B", () => {
+    applyProfileLabels(pad, "switch-pro");
+    expect(displayedLabel(pad, "A")).toBe("B");
+    expect(displayedLabel(pad, "LT")).toBe("ZL");
+    expect(displayedLabel(pad, "Select")).toBe("Menos");
+    expect(displayedLabel(pad, "Start")).toBe("Mais");
+  });
+
+  it("Teclado: a tecla que o botão aciona", () => {
+    applyKeyboardLabels(pad, { A: "KeyK", RB: "Space" }, teclas);
+    expect(displayedLabel(pad, "A")).toBe("K");
+    expect(displayedLabel(pad, "RB")).toBe("Espaço");
+  });
+
+  it("Teclado: controle sem tecla devolve null (a lista usa o nome padrão)", () => {
+    applyKeyboardLabels(pad, { A: "KeyK" }, teclas);
+    expect(displayedLabel(pad, "B")).toBeNull();
+  });
+
+  it("controle que não tem rótulo mutável (direcional, analógico) devolve null", () => {
+    expect(displayedLabel(pad, "Up")).toBeNull();
+    expect(displayedLabel(pad, "StickLeft")).toBeNull();
   });
 });

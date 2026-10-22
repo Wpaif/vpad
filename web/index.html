@@ -52,12 +52,16 @@
     </svg>
   </section>
 
-  <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" hidden>
-    <span class="layout-hint">Arraste os grupos</span>
-    <span data-note class="layout-note" role="status"></span>
-    <button type="button" data-act="reset">Restaurar</button>
-    <button type="button" data-act="cancel">Cancelar</button>
-    <button type="button" data-act="save" class="primary">Salvar</button>
+  <div id="layout-dock" class="layout-dock">
+    <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" hidden>
+      <span class="layout-hint">Arraste os grupos</span>
+      <span data-note class="layout-note" role="status"></span>
+      <button type="button" data-act="buttons">Botões</button>
+      <button type="button" data-act="reset">Restaurar</button>
+      <button type="button" data-act="cancel">Cancelar</button>
+      <button type="button" data-act="save" class="primary">Salvar</button>
+    </div>
+    <div id="hide-list" class="hide-list" role="group" aria-label="Botões visíveis" hidden></div>
   </div>
   <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" hidden></div>
 

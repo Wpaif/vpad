@@ -93,3 +93,17 @@ export function applyKeyboardLabels(pad: HTMLElement, map: Record<string, string
   }
   pad.dataset.profile = "teclado";
 }
+
+/**
+ * O nome que o botão tem agora, para outras telas (como a lista de ocultar) acompanharem o perfil:
+ * no teclado é a tecla; nos demais é o nome acessível (formas do DualShock, − e + do Switch) ou o
+ * texto. Devolve null para controle sem rótulo mutável ou sem tecla, e quem chama usa o próprio nome.
+ */
+export function displayedLabel(pad: HTMLElement, control: string): string | null {
+  if (!(control in LABELS.xbox360!)) return null;
+  const el = pad.querySelector<HTMLElement>(selector(control as Control));
+  if (!el) return null;
+  const name = el.hasAttribute("data-keycap") ? el.textContent : (el.getAttribute("aria-label") ?? el.textContent);
+  const trimmed = name?.trim();
+  return trimmed && trimmed !== "–" ? trimmed : null;
+}
