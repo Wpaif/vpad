@@ -70,13 +70,15 @@ function bindStick(el: HTMLElement, send: Send) {
   const update = (e: PointerEvent) => {
     const r = el.getBoundingClientRect();
     const radius = r.width / 2;
+    // o botão interno vive dentro do grupo, que o layout pode ter escalado: px de tela viram px locais
+    const k = el.offsetWidth > 0 ? r.width / el.offsetWidth : 1;
     const s = stickFromOffset(
       e.clientX - (r.left + radius),
       e.clientY - (r.top + r.height / 2),
       radius,
       DEADZONE,
     );
-    if (knob) knob.style.transform = `translate(${s.knobX}px, ${s.knobY}px)`;
+    if (knob) knob.style.transform = `translate(${s.knobX / k}px, ${s.knobY / k}px)`;
     send(encodeAxis(axisX, s.x));
     send(encodeAxis(axisY, s.y));
   };

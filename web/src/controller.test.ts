@@ -120,3 +120,15 @@ describe("modo edição do layout", () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("analógico em grupo escalado", () => {
+  it("o botão interno se move o mesmo tanto que o dedo, mesmo com o grupo ampliado", () => {
+    const el = stick() as HTMLElement;
+    // caixa de 200 px na tela, mas 100 px no layout: o grupo está em escala 2
+    Object.defineProperty(el, "offsetWidth", { value: 100, configurable: true });
+    ptr(el, "pointerdown", 1, 150, 100); // 50 px à direita do centro (100,100)
+    const knob = el.querySelector<HTMLElement>(".knob")!;
+    // 50 px de tela viram 25 px dentro do grupo escalado
+    expect(knob.style.transform).toBe("translate(25px, 0px)");
+  });
+});

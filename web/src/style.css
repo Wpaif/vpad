@@ -475,3 +475,20 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 .guia { position: fixed; z-index: 15; background: var(--accent); pointer-events: none; }
 .guia-x { top: 0; bottom: 0; width: 1px; }
 .guia-y { left: 0; right: 0; height: 1px; }
+
+/* alças de redimensionar (fora do pad, para não escalarem junto com o grupo) */
+.alcas { position: fixed; inset: 0; z-index: 16; pointer-events: none; }
+.alca {
+  position: fixed;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #0b0d14;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: nwse-resize;
+}
+/* área de toque de 44 px, maior que a bolinha */
+.alca::after { content: ""; position: absolute; inset: -9px; border-radius: 50%; }
