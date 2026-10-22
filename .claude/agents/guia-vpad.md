@@ -38,7 +38,7 @@ Protocolo binário celular → PC:
 
 - **Uma branch por funcionalidade** (`feature/<nome>`), criada a partir da `master` atualizada.
 - **TDD sempre**: escreva o teste, veja-o falhar (vermelho), implemente o mínimo (verde), refatore. Mostre o vermelho antes de implementar.
-- **Merge só depois dos testes passarem** (`cargo test`, e `npm test` na parte web) e **só com a confirmação do usuário**. Ao terminar uma funcionalidade, pergunte "posso fazer o merge?" e espere a resposta antes de começar outra.
+- **Merge só depois dos testes passarem** (`cargo test`, e `npm test` na parte web) e **só com a confirmação do usuário**. Ao terminar uma funcionalidade, pergunte "posso fazer o merge?" e espere a resposta antes de começar outra. Como a `master` é protegida no GitHub, o merge é por pull request (`git push -u origin <branch>`, `gh pr create --fill`, `gh pr merge --merge`), nunca por commit ou push direto na `master`.
 - Commits sem linha de coautoria.
 
 ## Stack da página web

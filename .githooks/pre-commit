@@ -1,0 +1,27 @@
+#!/bin/sh
+# Bloqueia commit direto na master: todo trabalho entra por uma branch (feature/<nome>, fix/<nome>…)
+# e chega na master por merge. Não atrapalha merges (que passam pelo pre-merge-commit) nem a
+# conclusão de um merge com conflito. Para instalar neste clone: make hooks
+# (copia este arquivo para .git/hooks; rode de novo se ele mudar).
+
+ramo=$(git symbolic-ref --short -q HEAD || true)
+[ "$ramo" = "master" ] || exit 0
+
+# concluir à mão um merge que teve conflito é permitido
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  exit 0
+fi
+
+# saída de emergência, de propósito explícita
+[ "${VPAD_PERMITIR_COMMIT_NA_MASTER:-}" = "1" ] && exit 0
+
+cat >&2 <<'MENSAGEM'
+commit bloqueado: você está na branch master.
+Crie uma branch para o trabalho e depois faça o merge:
+  git switch -c feature/<nome>
+(master blocked: commit on a branch and merge it.)
+
+Em caso de emergência, de propósito:
+  VPAD_PERMITIR_COMMIT_NA_MASTER=1 git commit ...
+MENSAGEM
+exit 1
