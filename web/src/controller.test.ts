@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { bindController } from "./controller";
+import { Button, encodeButton } from "./protocol";
 
 let sent: number[][];
 const send = (m: Uint8Array) => sent.push([...m]);
@@ -130,5 +131,32 @@ describe("analógico em grupo escalado", () => {
     const knob = el.querySelector<HTMLElement>(".knob")!;
     // 50 px de tela viram 25 px dentro do grupo escalado
     expect(knob.style.transform).toBe("translate(25px, 0px)");
+  });
+});
+
+describe("direcional", () => {
+  beforeEach(() => {
+    sent = [];
+    document.body.innerHTML = `
+      <div id="root"><div data-grupo="direcional">
+        <button data-btn="Up"></button><button data-btn="Right"></button>
+      </div></div>`;
+    const rect = (l: number) => ({ left: l, right: l + 50, top: 0, bottom: 50 }) as DOMRect;
+    document.querySelector("[data-btn=Up]")!.getBoundingClientRect = () => rect(0);
+    document.querySelector("[data-btn=Right]")!.getBoundingClientRect = () => rect(50);
+    bindController(document.getElementById("root")!, send);
+  });
+  const group = () => document.querySelector("[data-grupo=direcional]")!;
+
+  it("deslizar troca a seta sem levantar o dedo", () => {
+    ptr(group(), "pointerdown", 1, 10, 10);
+    ptr(group(), "pointermove", 1, 70, 10);
+    ptr(group(), "pointerup", 1, 70, 10);
+    expect(sent).toEqual([
+      [...encodeButton(Button.Up, true)],
+      [...encodeButton(Button.Up, false)],
+      [...encodeButton(Button.Right, true)],
+      [...encodeButton(Button.Right, false)],
+    ]);
   });
 });

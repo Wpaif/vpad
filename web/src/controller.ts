@@ -13,6 +13,7 @@ const STICKS = {
 /** Liga botões, gatilhos e analógicos (marcados com data-*) ao `send`. */
 export function bindController(root: HTMLElement, send: Send): void {
   bindButtons(root, send);
+  root.querySelectorAll<HTMLElement>("[data-grupo=direcional]").forEach((el) => bindDpad(el, send));
   bindTriggers(root, send);
   root.querySelectorAll<HTMLElement>("[data-stick]").forEach((el) => bindStick(el, send));
 }
@@ -50,9 +51,55 @@ function bindHold(el: HTMLElement, press: () => void, release: () => void) {
 
 function bindButtons(root: HTMLElement, send: Send) {
   root.querySelectorAll<HTMLElement>("[data-btn]").forEach((el) => {
+    if (el.closest("[data-grupo=direcional]")) return; // o direcional trata o deslize
     const id = Button[el.dataset.btn as keyof typeof Button];
     bindHold(el, () => send(encodeButton(id, true)), () => send(encodeButton(id, false)));
   });
+}
+
+/** Direcional: o dedo pode deslizar de uma seta para outra sem levantar, como num controle. */
+function bindDpad(group: HTMLElement, send: Send) {
+  const arrows = [...group.querySelectorAll<HTMLElement>("[data-btn]")];
+  const fingers = new Map<number, HTMLElement | null>();
+  const holders = (el: HTMLElement) => [...fingers.values()].filter((v) => v === el).length;
+
+  const arrowAt = (x: number, y: number) =>
+    arrows.find((el) => {
+      if (el.classList.contains("oculto")) return false;
+      const r = el.getBoundingClientRect();
+      return x >= r.left && x < r.right && y >= r.top && y < r.bottom;
+    }) ?? null;
+
+  const set = (id: number, next: HTMLElement | null) => {
+    const prev = fingers.get(id) ?? null;
+    if (prev === next) return;
+    fingers.set(id, next);
+    if (prev && holders(prev) === 0) {
+      prev.removeAttribute("data-pressed");
+      send(encodeButton(Button[prev.dataset.btn as keyof typeof Button], false));
+    }
+    if (next && holders(next) === 1) {
+      next.setAttribute("data-pressed", "");
+      send(encodeButton(Button[next.dataset.btn as keyof typeof Button], true));
+    }
+  };
+
+  group.addEventListener("pointerdown", (e) => {
+    if (blocked(group) || fingers.has(e.pointerId)) return;
+    fingers.set(e.pointerId, null);
+    capture(group, e.pointerId);
+    set(e.pointerId, arrowAt(e.clientX, e.clientY));
+  });
+  group.addEventListener("pointermove", (e) => {
+    if (fingers.has(e.pointerId)) set(e.pointerId, arrowAt(e.clientX, e.clientY));
+  });
+  const up = (e: PointerEvent) => {
+    if (!fingers.has(e.pointerId)) return;
+    set(e.pointerId, null);
+    fingers.delete(e.pointerId);
+  };
+  group.addEventListener("pointerup", up);
+  group.addEventListener("pointercancel", up);
 }
 
 function bindTriggers(root: HTMLElement, send: Send) {
