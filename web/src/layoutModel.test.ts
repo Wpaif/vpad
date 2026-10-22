@@ -18,6 +18,8 @@ import {
   setHidden,
   withGroup,
   type Layout,
+  controlOffset,
+  withControl,
 } from "./layoutModel";
 
 const layout = (parcial: Partial<Layout> = {}): Layout => ({ ...defaultLayout(), ...parcial });
@@ -251,5 +253,88 @@ describe("serializeLayout", () => {
 
   it("o layout padrão é pequeno", () => {
     expect(serializeLayout(defaultLayout())).toBe('{"version":1,"groups":{},"hidden":[]}');
+  });
+});
+
+describe("posição individual dos controles (grupo destravado)", () => {
+  it("o padrão não tem deslocamento de controle e continua o mesmo de antes", () => {
+    expect(controlOffset(defaultLayout(), "A")).toEqual({ dx: 0, dy: 0 });
+    expect(defaultLayout().controls).toBeUndefined();
+    expect(serializeLayout(defaultLayout())).toBe('{"version":1,"groups":{},"hidden":[]}');
+  });
+
+  it("withControl muda só o controle pedido, sem mexer no original", () => {
+    const base = defaultLayout();
+    const l = withControl(base, "A", { dx: 0.1, dy: -0.05 });
+    expect(controlOffset(l, "A")).toEqual({ dx: 0.1, dy: -0.05 });
+    expect(controlOffset(l, "B")).toEqual({ dx: 0, dy: 0 });
+    expect(controlOffset(base, "A")).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("aceita mudar só um dos eixos e mantém o outro", () => {
+    const l = withControl(withControl(defaultLayout(), "X", { dx: 0.2, dy: 0.1 }), "X", { dx: -0.3 });
+    expect(controlOffset(l, "X")).toEqual({ dx: -0.3, dy: 0.1 });
+  });
+
+  it("limita a ±1 e arredonda a 4 casas", () => {
+    const l = withControl(defaultLayout(), "A", { dx: 5, dy: 0.123456789 });
+    expect(controlOffset(l, "A")).toEqual({ dx: 1, dy: 0.1235 });
+  });
+
+  it("deslocamento zero é neutro e some do layout", () => {
+    const l = withControl(withControl(defaultLayout(), "A", { dx: 0.1 }), "A", { dx: 0, dy: 0 });
+    expect(l.controls).toBeUndefined();
+    expect(isDefault(l)).toBe(true);
+  });
+
+  it("um deslocamento de controle tira o layout de padrão", () => {
+    expect(isDefault(withControl(defaultLayout(), "Up", { dy: 0.1 }))).toBe(false);
+  });
+
+  it("normalize descarta controle desconhecido, NaN e infinito", () => {
+    const sujo = {
+      ...defaultLayout(),
+      controls: { A: { dx: NaN, dy: Infinity }, Z: { dx: 0.1, dy: 0 }, B: { dx: 0.2, dy: 0 } },
+    } as unknown as Layout;
+    const l = normalizeLayout(sujo);
+    expect(l.controls).toEqual({ B: { dx: 0.2, dy: 0 } });
+  });
+
+  it("serialize e parse devolvem o mesmo layout, em ordem estável", () => {
+    const l = withControl(withControl(defaultLayout(), "Y", { dx: 0.1 }), "A", { dy: 0.2 });
+    const json = serializeLayout(l);
+    expect(json.indexOf('"A"')).toBeLessThan(json.indexOf('"Y"')); // ordem do catálogo
+    expect(parseLayout(JSON.parse(json)).layout).toEqual(l);
+  });
+
+  it("parse descarta entradas ruins de controle uma a uma", () => {
+    const r = parseLayout({
+      version: 1,
+      groups: {},
+      hidden: [],
+      controls: { A: { dx: 0.1, dy: 0 }, B: "x", X: { dx: "1", dy: 0 }, Y: null, __proto__: { Start: { dx: 1, dy: 1 } } },
+    });
+    expect(r.status).toBe("ok");
+    expect(r.layout.controls).toEqual({ A: { dx: 0.1, dy: 0 } });
+  });
+
+  it("controls que não é objeto é ignorado", () => {
+    expect(parseLayout({ version: 1, groups: {}, hidden: [], controls: [1, 2] }).layout).toEqual(defaultLayout());
+    expect(parseLayout({ version: 1, groups: {}, hidden: [], controls: 7 }).layout).toEqual(defaultLayout());
+  });
+
+  it("resetGroup também desfaz o deslocamento individual dos controles daquele grupo", () => {
+    let l = withControl(defaultLayout(), "A", { dx: 0.1 });
+    l = withControl(l, "Up", { dy: 0.1 });
+    l = resetGroup(withGroup(l, "face", { dx: 0.2 }), "face");
+    expect(controlOffset(l, "A")).toEqual({ dx: 0, dy: 0 });
+    expect(controlOffset(l, "Up")).toEqual({ dx: 0, dy: 0.1 });
+    expect(l.groups.face).toBeUndefined();
+  });
+
+  it("outras operações preservam os deslocamentos de controle", () => {
+    const l = withControl(defaultLayout(), "A", { dx: 0.1 });
+    expect(controlOffset(withGroup(l, "menu", { dx: 0.1 }), "A").dx).toBe(0.1);
+    expect(controlOffset(setHidden(l, "B", true), "A").dx).toBe(0.1);
   });
 });

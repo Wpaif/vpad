@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { adjustOf } from "./layoutModel";
+import { adjustOf, controlOffset } from "./layoutModel";
 import { LAYOUT_KEY } from "./layoutStorage";
 import { createLayoutStore, type LayoutStore } from "./layoutStore.svelte";
 import { mountLayoutEditor } from "./layoutEditor";
@@ -24,8 +24,8 @@ beforeEach(() => {
   localStorage.clear();
   document.body.innerHTML = `
     <main id="pad">
-      <div data-grupo="face"><button data-btn="A"></button></div>
-      <div data-grupo="menu"></div>
+      <div data-grupo="face"><button data-btn="A"></button><button data-btn="B"></button></div>
+      <div data-grupo="menu"><button data-btn="Select"></button><button data-btn="Start"></button></div>
     </main>`;
   pad = document.getElementById("pad")!;
   const rects: Record<string, Rect> = { face: rect(100, 100, 100, 100), menu: rect(300, 100, 100, 50) };
@@ -199,6 +199,143 @@ describe("alças de redimensionar", () => {
     await editor.refresh();
     editor.stop();
     expect(document.querySelectorAll("[data-alca]").length).toBe(0);
+    editor = { stop: vi.fn(), refresh: async () => {} };
+  });
+});
+
+describe("destravar grupo (mover botões soltos)", () => {
+  const cadeado = (id: string) => document.querySelector<HTMLElement>(`[data-cadeado=${id}]`);
+  const botao = (id: string) => pad.querySelector<HTMLElement>(`[data-btn=${id}]`)!;
+  const setRect = (el: HTMLElement, r: Rect) => {
+    el.getBoundingClientRect = () => ({ ...r, width: r.right - r.left, height: r.bottom - r.top }) as DOMRect;
+  };
+
+  beforeEach(() => {
+    setRect(botao("A"), rect(110, 110, 60, 60));
+    setRect(botao("B"), rect(600, 300, 60, 60));
+    setRect(botao("Select"), rect(300, 100, 45, 50));
+    setRect(botao("Start"), rect(355, 100, 45, 50));
+  });
+
+  const soltar = async (id: string) => {
+    store.edit();
+    await editor.refresh();
+    cadeado(id)!.click();
+  };
+
+  it("fora do modo edição não há cadeados", async () => {
+    await editor.refresh();
+    expect(document.querySelectorAll("[data-cadeado]").length).toBe(0);
+  });
+
+  it("em edição há um cadeado por grupo com mais de um controle, começando travado", async () => {
+    store.edit();
+    await editor.refresh();
+    expect(cadeado("face")).not.toBeNull();
+    expect(cadeado("menu")).not.toBeNull();
+    expect(cadeado("face")!.getAttribute("aria-pressed")).toBe("false");
+    expect(grupo("face").hasAttribute("data-solto")).toBe(false);
+  });
+
+  it("grupo de um controle só (analógico) não tem cadeado", async () => {
+    pad.insertAdjacentHTML("beforeend", `<div data-grupo="analogico-esq" data-stick="left"></div>`);
+    store.edit();
+    await editor.refresh();
+    expect(cadeado("analogico-esq")).toBeNull();
+  });
+
+  it("o cadeado fica no canto de cima à direita do grupo (a alça é a de baixo)", async () => {
+    store.edit();
+    await editor.refresh();
+    expect(cadeado("face")!.style.left).toBe("200px");
+    expect(cadeado("face")!.style.top).toBe("100px");
+  });
+
+  it("o cadeado de um grupo colado na borda fica inteiro dentro da tela", async () => {
+    setRect(grupo("face"), rect(700, 0, 100, 100));
+    store.edit();
+    await editor.refresh();
+    expect(cadeado("face")!.style.left).toBe("786px");
+    expect(cadeado("face")!.style.top).toBe("14px");
+  });
+
+  it("clicar destrava (e de novo trava), marcando o grupo e o botão", async () => {
+    await soltar("face");
+    expect(cadeado("face")!.getAttribute("aria-pressed")).toBe("true");
+    expect(grupo("face").hasAttribute("data-solto")).toBe(true);
+    cadeado("face")!.click();
+    expect(cadeado("face")!.getAttribute("aria-pressed")).toBe("false");
+    expect(grupo("face").hasAttribute("data-solto")).toBe(false);
+  });
+
+  it("grupo destravado: arrastar um botão move só ele", async () => {
+    await soltar("face");
+    ptr(botao("A"), "pointerdown", 1, 140, 140);
+    ptr(botao("A"), "pointermove", 1, 180, 170); // +40, +30
+    expect(controlOffset(store.current, "A").dx).toBeCloseTo(40 / 800, 4);
+    expect(controlOffset(store.current, "A").dy).toBeCloseTo(30 / 400, 4);
+    expect(controlOffset(store.current, "B")).toEqual({ dx: 0, dy: 0 });
+    expect(faceAdjust()).toEqual({ dx: 0, dy: 0, scale: 1 });
+  });
+
+  it("grupo destravado: arrastar o vão do grupo não move nada", async () => {
+    await soltar("face");
+    ptr(grupo("face"), "pointerdown", 1, 190, 190);
+    ptr(grupo("face"), "pointermove", 1, 240, 230);
+    expect(faceAdjust()).toEqual({ dx: 0, dy: 0, scale: 1 });
+    expect(controlOffset(store.current, "A")).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("grupo travado continua arrastando o grupo inteiro", () => {
+    store.edit();
+    ptr(botao("A"), "pointerdown", 1, 140, 140);
+    ptr(botao("A"), "pointermove", 1, 190, 180);
+    expect(faceAdjust().dx).toBeGreaterThan(0);
+    expect(controlOffset(store.current, "A")).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it("o deslocamento do botão vale na escala do grupo (o grupo ampliado o amplia)", async () => {
+    store.edit();
+    store.move("face", { scale: 2 });
+    await editor.refresh();
+    cadeado("face")!.click();
+    ptr(botao("A"), "pointerdown", 1, 140, 140);
+    ptr(botao("A"), "pointermove", 1, 180, 140); // +40 px de tela = 20 px locais
+    expect(controlOffset(store.current, "A").dx).toBeCloseTo(40 / (800 * 2), 4);
+  });
+
+  it("o botão não sai da tela", async () => {
+    await soltar("face");
+    ptr(botao("A"), "pointerdown", 1, 140, 140);
+    ptr(botao("A"), "pointermove", 1, -360, 140); // pediria -500; só cabem -110
+    expect(controlOffset(store.current, "A").dx).toBeCloseTo(-110 / 800, 4);
+  });
+
+  it("o botão gruda no alinhamento de outro botão", async () => {
+    await soltar("face");
+    // A (110..170) com +132 fica em 242..302 → a direita encosta no Select (esq. 300): grudar em 300 (+130)
+    ptr(botao("A"), "pointerdown", 1, 140, 140);
+    ptr(botao("A"), "pointermove", 1, 272, 300); // y +160 longe de tudo
+    expect(controlOffset(store.current, "A").dx).toBeCloseTo(130 / 800, 4);
+    expect(guides.at(-1)!.x).toBe(300);
+  });
+
+  it("sair da edição trava tudo de novo", async () => {
+    await soltar("face");
+    store.cancel();
+    await editor.refresh();
+    expect(grupo("face").hasAttribute("data-solto")).toBe(false);
+    expect(document.querySelectorAll("[data-cadeado]").length).toBe(0);
+    store.edit();
+    await editor.refresh();
+    expect(cadeado("face")!.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("parar o editor remove os cadeados e a marca dos grupos", async () => {
+    await soltar("face");
+    editor.stop();
+    expect(document.querySelectorAll("[data-cadeado]").length).toBe(0);
+    expect(grupo("face").hasAttribute("data-solto")).toBe(false);
     editor = { stop: vi.fn(), refresh: async () => {} };
   });
 });
