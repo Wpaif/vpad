@@ -4,6 +4,7 @@ import {
   setHidden,
   withControl,
   withGroup,
+  withOpacity,
   type ControlAdjust,
   type ControlId,
   type GroupAdjust,
@@ -48,6 +49,10 @@ export function createLayoutStore() {
     /** Move um controle sozinho (o grupo dele está destravado na tela). */
     moveControl(control: ControlId, patch: Partial<ControlAdjust>) {
       change((l) => withControl(l, control, patch));
+    },
+    /** Opacidade de todos os botões (0,2 a 1). */
+    setOpacity(opacity: number) {
+      change((l) => withOpacity(l, opacity));
     },
     resetGroup(group: GroupId) {
       change((l) => resetGroup(l, group));

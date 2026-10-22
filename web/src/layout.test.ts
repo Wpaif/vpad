@@ -121,3 +121,13 @@ describe("estado do layout no PC, na página", () => {
     expect(note!.getAttribute("role")).toBe("status");
   });
 });
+
+describe("opacidade na barra de edição", () => {
+  it("a barra tem um controle deslizante de 20% a 100%, de 5 em 5, que começa em 100%", () => {
+    const input = document.querySelector<HTMLInputElement>("#layout-bar #layout-opacity");
+    expect(input).not.toBeNull();
+    expect(input!.type).toBe("range");
+    expect([input!.min, input!.max, input!.step, input!.value]).toEqual(["20", "100", "5", "100"]);
+    expect(input!.getAttribute("aria-label")).toBe("Opacidade dos botões");
+  });
+});

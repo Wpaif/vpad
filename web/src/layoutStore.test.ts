@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { controlOffset, defaultLayout, isHidden, withGroup } from "./layoutModel";
+import { controlOffset, defaultLayout, isHidden, opacityOf, withGroup } from "./layoutModel";
 import { LAYOUT_KEY } from "./layoutStorage";
 import { createLayoutStore } from "./layoutStore.svelte";
 
@@ -117,5 +117,33 @@ describe("layoutStore", () => {
     s.edit();
     s.move("face", { dx: 0.3 });
     expect(s.saved).toEqual(defaultLayout());
+  });
+
+  it("setOpacity mexe no rascunho, salva e cancela como o resto", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.setOpacity(0.5);
+    expect(opacityOf(s.current)).toBe(0.5);
+    expect(localStorage.getItem(LAYOUT_KEY)).toBeNull();
+    s.cancel();
+    expect(opacityOf(s.current)).toBe(1);
+    s.edit();
+    s.setOpacity(0.5);
+    s.save();
+    expect(opacityOf(createLayoutStore().current)).toBe(0.5);
+  });
+
+  it("setOpacity fora do modo edição não faz nada", () => {
+    const s = createLayoutStore();
+    s.setOpacity(0.5);
+    expect(s.current).toEqual(defaultLayout());
+  });
+
+  it("restaurar o padrão volta a opacidade a 100%", () => {
+    const s = createLayoutStore();
+    s.edit();
+    s.setOpacity(0.4);
+    s.restoreDefault();
+    expect(opacityOf(s.current)).toBe(1);
   });
 });

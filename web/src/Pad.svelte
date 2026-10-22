@@ -27,7 +27,7 @@
   `data-btn`, `data-trigger` e `data-stick` são o que o controle de toque e o protocolo usam.
   Os estilos ficam em style.css; os rótulos de cada perfil são aplicados depois, por labels.ts.
 -->
-<main id="pad" aria-label="Controle virtual" data-editando={editing ? "" : undefined}>
+<main id="pad" aria-label="Controle virtual" data-editando={editing ? "" : undefined} style:--opacidade={layout.opacity}>
   <section class="zone left">
     <div class="shoulders" data-grupo="ombros-esq" style:transform={mover("ombros-esq")}>
       <button style:translate={soltar("LT")} class:oculto={oculto("LT")} class="shoulder" data-trigger="LT">LT</button>

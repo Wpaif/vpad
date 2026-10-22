@@ -1,7 +1,7 @@
 import { mount, unmount } from "svelte";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import Pad from "./Pad.svelte";
-import { defaultLayout, setHidden, withControl, withGroup, type Layout } from "./layoutModel";
+import { defaultLayout, setHidden, withControl, withGroup, withOpacity, type Layout } from "./layoutModel";
 
 let app: ReturnType<typeof mount>;
 let pad: HTMLElement;
@@ -164,5 +164,19 @@ describe("Pad com controle solto", () => {
   it("vale também para gatilhos (LT/RT)", () => {
     montar(withControl(defaultLayout(), "LT", { dx: 0.02 }));
     expect(pad.querySelector<HTMLElement>("[data-trigger=LT]")!.style.getPropertyValue("translate")).toContain("--app-w");
+  });
+});
+
+describe("Pad com opacidade", () => {
+  it("sem opacidade o pad não define a variável", () => {
+    expect(pad.style.getPropertyValue("--opacidade")).toBe("");
+  });
+
+  it("com opacidade, define --opacidade no pad (o CSS a aplica aos botões)", () => {
+    unmount(app);
+    document.body.innerHTML = `<div id="app"></div>`;
+    app = mount(Pad, { target: document.getElementById("app")!, props: { layout: withOpacity(defaultLayout(), 0.6) } });
+    pad = document.getElementById("pad")!;
+    expect(pad.style.getPropertyValue("--opacidade")).toBe("0.6");
   });
 });

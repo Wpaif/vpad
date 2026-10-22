@@ -196,3 +196,18 @@ async fn falha_de_disco_no_put_e_500_e_nao_muda_o_layout() {
     assert_eq!(chamar(&a.app, "GET", None, Some(&a.token)).await.1, json!({ "layout": null }));
     let _ = fs::remove_dir_all(&pasta);
 }
+
+#[tokio::test]
+async fn opacidade_dos_botoes_e_guardada_e_devolvida() {
+    let a = ambiente();
+    let layout = json!({ "version": 1, "groups": {}, "hidden": [], "opacity": 0.6 });
+    let (status, corpo) = chamar(&a.app, "PUT", Some(pedido(layout.clone())), Some(&a.token)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(corpo["layout"]["opacity"], json!(0.6));
+    assert_eq!(chamar(&a.app, "GET", None, Some(&a.token)).await.1["layout"], layout);
+
+    for ruim in [json!(5), json!(0.1), json!("0.5")] {
+        let l = json!({ "version": 1, "opacity": ruim.clone() });
+        assert_eq!(chamar(&a.app, "PUT", Some(pedido(l)), Some(&a.token)).await.0, StatusCode::BAD_REQUEST, "{ruim}");
+    }
+}

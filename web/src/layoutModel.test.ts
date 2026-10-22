@@ -20,6 +20,9 @@ import {
   type Layout,
   controlOffset,
   withControl,
+  MIN_OPACITY,
+  opacityOf,
+  withOpacity,
 } from "./layoutModel";
 
 const layout = (parcial: Partial<Layout> = {}): Layout => ({ ...defaultLayout(), ...parcial });
@@ -336,5 +339,67 @@ describe("posição individual dos controles (grupo destravado)", () => {
     const l = withControl(defaultLayout(), "A", { dx: 0.1 });
     expect(controlOffset(withGroup(l, "menu", { dx: 0.1 }), "A").dx).toBe(0.1);
     expect(controlOffset(setHidden(l, "B", true), "A").dx).toBe(0.1);
+  });
+});
+
+describe("opacidade dos botões", () => {
+  it("o padrão é opaco e continua serializando como antes", () => {
+    expect(opacityOf(defaultLayout())).toBe(1);
+    expect(defaultLayout().opacity).toBeUndefined();
+    expect(serializeLayout(defaultLayout())).toBe('{"version":1,"groups":{},"hidden":[]}');
+    expect(MIN_OPACITY).toBe(0.2);
+  });
+
+  it("withOpacity muda só a opacidade, sem mexer no original", () => {
+    const base = withGroup(defaultLayout(), "face", { dx: 0.1 });
+    const l = withOpacity(base, 0.6);
+    expect(opacityOf(l)).toBe(0.6);
+    expect(opacityOf(base)).toBe(1);
+    expect(l.groups.face?.dx).toBe(0.1);
+  });
+
+  it("limita entre o mínimo (20%) e 100%, e arredonda a 2 casas", () => {
+    expect(opacityOf(withOpacity(defaultLayout(), 0))).toBe(MIN_OPACITY);
+    expect(opacityOf(withOpacity(defaultLayout(), -3))).toBe(MIN_OPACITY);
+    expect(opacityOf(withOpacity(defaultLayout(), 7))).toBe(1);
+    expect(opacityOf(withOpacity(defaultLayout(), 0.456789))).toBe(0.46);
+  });
+
+  it("NaN e infinito voltam ao opaco", () => {
+    expect(opacityOf(withOpacity(defaultLayout(), NaN))).toBe(1);
+    expect(opacityOf(withOpacity(defaultLayout(), Infinity))).toBe(1);
+  });
+
+  it("100% é o padrão: o campo some do layout", () => {
+    const l = withOpacity(withOpacity(defaultLayout(), 0.5), 1);
+    expect(l.opacity).toBeUndefined();
+    expect(isDefault(l)).toBe(true);
+  });
+
+  it("uma opacidade menor que 100% tira o layout de padrão", () => {
+    expect(isDefault(withOpacity(defaultLayout(), 0.8))).toBe(false);
+  });
+
+  it("serialize e parse devolvem o mesmo layout", () => {
+    const l = withOpacity(withGroup(defaultLayout(), "menu", { dy: 0.1 }), 0.65);
+    expect(JSON.parse(serializeLayout(l)).opacity).toBe(0.65);
+    expect(parseLayout(JSON.parse(serializeLayout(l))).layout).toEqual(l);
+  });
+
+  it("parse descarta opacidade que não é número e limita a que está fora da faixa", () => {
+    const base = { version: 1, groups: {}, hidden: [] };
+    expect(parseLayout({ ...base, opacity: "0.5" }).layout.opacity).toBeUndefined();
+    expect(parseLayout({ ...base, opacity: null }).layout.opacity).toBeUndefined();
+    expect(parseLayout({ ...base, opacity: 0.01 }).layout.opacity).toBe(MIN_OPACITY);
+    expect(parseLayout({ ...base, opacity: 5 }).layout.opacity).toBeUndefined(); // vira 1 = padrão
+    expect(parseLayout({ ...base, opacity: 0.5 }).status).toBe("ok");
+  });
+
+  it("outras operações preservam a opacidade", () => {
+    const l = withOpacity(defaultLayout(), 0.5);
+    expect(opacityOf(withGroup(l, "face", { dx: 0.1 }))).toBe(0.5);
+    expect(opacityOf(setHidden(l, "A", true))).toBe(0.5);
+    expect(opacityOf(resetGroup(withGroup(l, "face", { dx: 0.1 }), "face"))).toBe(0.5);
+    expect(opacityOf(withControl(l, "A", { dx: 0.1 }))).toBe(0.5);
   });
 });

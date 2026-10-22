@@ -14,7 +14,7 @@ use std::{
 
 use serde_json::Value;
 
-const CAMPOS: [&str; 4] = ["version", "groups", "hidden", "controls"];
+const CAMPOS: [&str; 5] = ["version", "groups", "hidden", "controls", "opacity"];
 const MAX_GRUPOS: usize = 16;
 const MAX_CONTROLES: usize = 32;
 const MAX_ID: usize = 24;
@@ -68,6 +68,12 @@ pub fn validar(valor: &Value) -> Result<Value, String> {
     if let Some(controles) = objeto.get("controls") {
         mapa_de_ajustes(controles, MAX_CONTROLES, &[("dx", -1.0, 1.0), ("dy", -1.0, 1.0)])
             .map_err(|e| format!("controls: {e}"))?;
+    }
+    if let Some(opacidade) = objeto.get("opacity") {
+        match opacidade.as_f64() {
+            Some(n) if n.is_finite() && (0.2..=1.0).contains(&n) => {}
+            _ => return Err("opacity precisa ser um número de 0,2 a 1".into()),
+        }
     }
     if let Some(ocultos) = objeto.get("hidden") {
         let lista = ocultos.as_array().ok_or("hidden precisa ser uma lista")?;
@@ -294,7 +300,25 @@ mod testes {
 
     #[test]
     fn os_campos_aceitos_sao_so_os_do_cliente() {
-        assert_eq!(CAMPOS, ["version", "groups", "hidden", "controls"]);
+        assert_eq!(CAMPOS, ["version", "groups", "hidden", "controls", "opacity"]);
+    }
+
+    #[test]
+    fn opacidade_aceita_de_20_a_100_por_cento() {
+        for ok in [json!(0.2), json!(0.5), json!(0.95), json!(1), json!(1.0)] {
+            let mut l = padrao();
+            l["opacity"] = ok.clone();
+            assert_eq!(validar(&l).unwrap(), l, "{ok}");
+        }
+    }
+
+    #[test]
+    fn opacidade_fora_da_faixa_ou_que_nao_e_numero_e_recusada() {
+        for ruim in [json!(0.19), json!(0), json!(-1), json!(1.01), json!("0.5"), json!(null), json!([0.5]), json!({})] {
+            let mut l = padrao();
+            l["opacity"] = ruim.clone();
+            assert!(validar(&l).is_err(), "{ruim}");
+        }
     }
 
     // ---------- armazenamento ----------

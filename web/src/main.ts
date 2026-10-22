@@ -27,6 +27,7 @@ import {
 import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
 import { mountLayoutBar } from "./layoutBar";
 import { mountHideList } from "./layoutHideList";
+import { mountOpacitySlider } from "./layoutOpacity";
 import { mountLayoutEditor } from "./layoutEditor";
 import { createLayoutSync } from "./layoutSync";
 import { renderSyncNote } from "./layoutSyncNote";
@@ -161,10 +162,16 @@ function start(token: string) {
     onChange: () => {
       void layoutEditor.refresh();
       hideList.sync();
+      opacity.sync();
       if (!layoutStore.editing) return;
       statsEl.hidden = true;
       clearInterval(refresh);
     },
+  });
+  const opacity = mountOpacitySlider({
+    input: document.getElementById("layout-opacity") as HTMLInputElement,
+    output: document.getElementById("layout-opacity-value"),
+    store: layoutStore,
   });
   const hideList = mountHideList({
     panel: document.getElementById("hide-list")!,

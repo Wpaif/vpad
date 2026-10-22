@@ -155,6 +155,8 @@ aparece uma barra no centro da tela.
   seguem o perfil em uso (Cruz, Círculo… no DualShock; as teclas no modo teclado).
 - **Soltar um grupo**: o cadeado do canto superior direito de cada grupo (com mais de um botão)
   o destrava para mover cada botão individualmente. Grupo travado se move em bloco.
+- **Opacidade**: o controle deslizante da barra deixa todos os botões mais transparentes, de 100%
+  até 20%. Um botão apertado aparece por inteiro, para você ver o toque mesmo com pouca opacidade.
 - **Restaurar / Cancelar / Salvar**: só **Salvar** grava. **Restaurar** volta ao layout padrão
   (dentro do rascunho) e **Cancelar** descarta o que foi feito.
 
