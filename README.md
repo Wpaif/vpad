@@ -325,7 +325,8 @@ testes passando, `gh pr merge --merge` (merge commit, como nos merges locais).
 O **CI** (GitHub Actions, `.github/workflows/ci.yml`) roda em todo pull request e em todo push na
 `master`, com três jobs: `web` (checagem de tipos, build e testes da página), `rust` (`cargo test
 --locked`; no runner do GitHub não há `/dev/uinput`, então os testes do dispositivo virtual se pulam
-sozinhos) e `hooks` (o teste do hook abaixo). Localmente, o equivalente é `make test`.
+sozinhos) e `hooks` (o teste do hook abaixo). A `master` só aceita o merge com os três verdes.
+Localmente, o equivalente é `make test`.
 
 O repositório bloqueia **commit direto na `master`** (hook `.githooks/pre-commit`): o trabalho entra
 por uma branch e chega na `master` por merge, que o hook não atrapalha. Depois de clonar, instale-o
