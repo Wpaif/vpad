@@ -25,12 +25,21 @@ import {
   renderStatus,
 } from "./ui";
 import { bindAppHeight, readSafeArea, showViewportDebug } from "./viewport";
+import { applyStaticTranslations, initLanguage } from "./i18n";
+import { mountLanguagePicker } from "./languagePicker";
 import { mountLayoutBar } from "./layoutBar";
 import { mountHideList } from "./layoutHideList";
 import { mountOpacitySlider } from "./layoutOpacity";
 import { mountLayoutEditor } from "./layoutEditor";
 import { createLayoutSync } from "./layoutSync";
 import { renderSyncNote } from "./layoutSyncNote";
+
+const storage = safeStorage();
+
+// O idioma vem antes de qualquer texto (inclusive o do Pad): o que o usuário escolheu, ou o do celular.
+initLanguage({ languages: navigator.languages?.length ? navigator.languages : [navigator.language], storage });
+applyStaticTranslations(document);
+mountLanguagePicker(document.getElementById("language-select") as HTMLSelectElement, storage);
 
 const layoutStore = createLayoutStore();
 mount(Pad, {
@@ -45,7 +54,6 @@ mount(Pad, {
   },
 });
 
-const storage = safeStorage();
 const pad = document.getElementById("pad")!;
 
 lockGestures();

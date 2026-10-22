@@ -4,19 +4,22 @@
  * `data-btn` nunca: no Switch Pro, o botão de baixo (id A) é o "B" da Nintendo.
  */
 
+import { t } from "./i18n";
+import type { Key } from "./locales/pt-BR";
+
 type Shape = "cross" | "circle" | "square" | "triangle";
 
 interface Label {
   text?: string;
   shape?: Shape;
-  /** nome acessível, quando o texto/símbolo sozinho não basta */
-  name?: string;
+  /** chave do nome acessível, quando o texto/símbolo sozinho não basta (resolvida ao desenhar) */
+  name?: Key;
 }
 
 type Control = "A" | "B" | "X" | "Y" | "LB" | "RB" | "LT" | "RT" | "Select" | "Start";
 
-const text = (t: string, name?: string): Label => ({ text: t, name });
-const shape = (s: Shape, name: string): Label => ({ shape: s, name });
+const text = (value: string, name?: Key): Label => ({ text: value, name });
+const shape = (s: Shape, name: Key): Label => ({ shape: s, name });
 
 const LABELS: Record<string, Record<Control, Label>> = {
   xbox360: {
@@ -25,15 +28,15 @@ const LABELS: Record<string, Record<Control, Label>> = {
     Select: text("Back"), Start: text("Start"),
   },
   ds4: {
-    A: shape("cross", "Cruz"), B: shape("circle", "Círculo"),
-    X: shape("square", "Quadrado"), Y: shape("triangle", "Triângulo"),
+    A: shape("cross", "shape.cross"), B: shape("circle", "shape.circle"),
+    X: shape("square", "shape.square"), Y: shape("triangle", "shape.triangle"),
     LB: text("L1"), RB: text("R1"), LT: text("L2"), RT: text("R2"),
     Select: text("Share"), Start: text("Options"),
   },
   "switch-pro": {
     A: text("B"), B: text("A"), X: text("Y"), Y: text("X"),
     LB: text("L"), RB: text("R"), LT: text("ZL"), RT: text("ZR"),
-    Select: text("−", "Menos"), Start: text("+", "Mais"),
+    Select: text("−", "sign.minus"), Start: text("+", "sign.plus"),
   },
 };
 
@@ -56,7 +59,7 @@ function render(el: HTMLElement, label: Label) {
   }
   el.toggleAttribute("data-symbol", [...(label.text ?? "")].length === 1);
   el.removeAttribute("data-keycap");
-  if (label.name) el.setAttribute("aria-label", label.name);
+  if (label.name) el.setAttribute("aria-label", t(label.name));
   else el.removeAttribute("aria-label");
 }
 
@@ -87,7 +90,7 @@ export function applyKeyboardLabels(pad: HTMLElement, map: Record<string, string
     const keyId = map[control];
     const name = keyId === undefined ? undefined : (names.get(keyId) ?? keyId);
     el.textContent = name ?? "–";
-    el.setAttribute("aria-label", name === undefined ? "Sem tecla" : `Tecla ${name}`);
+    el.setAttribute("aria-label", name === undefined ? t("labels.keycap.empty") : t("labels.keycap", { name }));
     el.setAttribute("data-keycap", "");
     el.removeAttribute("data-symbol");
   }

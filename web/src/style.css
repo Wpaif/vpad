@@ -241,6 +241,12 @@ button[data-pressed] {
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
   font-size: 12px;
+  /* em telas baixas o painel rola em vez de passar do fim da tela */
+  max-height: calc(var(--app-h, 100dvh) - max(10px, env(safe-area-inset-top)) - 52px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.3) transparent;
 }
 .stats[hidden] { display: none; }
 .stats dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 6px; margin: 0; }
@@ -548,3 +554,15 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 .layout-opacity input { width: 84px; accent-color: var(--accent); }
 .layout-opacity output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .layout-opacity-label { display: none; } }
+
+/* seletor de idioma do painel */
+.language-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.language-row .label { margin: 0; }
+.language-row select {
+  min-width: 110px;
+  height: 28px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: transparent;
+  color: inherit;
+}

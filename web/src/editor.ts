@@ -1,4 +1,5 @@
-import { CONTROLS, CONTROL_GROUPS } from "./controls";
+import { CONTROLS, CONTROL_GROUPS, groupName } from "./controls";
+import { t } from "./i18n";
 import type { KeyboardConfig, KeyInfo, KeyMap } from "./keyboard";
 
 export interface EditorDeps {
@@ -12,19 +13,20 @@ export interface KeyEditor {
   close: () => void;
 }
 
-const TEMPLATE = `
+/** Montado na hora de abrir (o idioma só é escolhido depois do carregamento do módulo). */
+const template = () => `
   <header class="editor-bar">
-    <h2>Teclas</h2>
-    <button type="button" data-action="reset">Restaurar padrão</button>
-    <button type="button" data-action="close" aria-label="Fechar">×</button>
+    <h2>${t("editor.title")}</h2>
+    <button type="button" data-action="reset">${t("editor.reset")}</button>
+    <button type="button" data-action="close" aria-label="${t("editor.close")}">×</button>
   </header>
   <p class="editor-status" role="status"></p>
   <div class="editor-body" data-scroll></div>
   <div class="key-picker" hidden>
     <header class="editor-bar">
       <h2 data-role="picker-title"></h2>
-      <button type="button" data-action="none">Nenhuma</button>
-      <button type="button" data-action="back">Voltar</button>
+      <button type="button" data-action="none">${t("editor.picker.none")}</button>
+      <button type="button" data-action="back">${t("editor.picker.back")}</button>
     </header>
     <div class="picker-keys" data-scroll></div>
   </div>`;
@@ -38,7 +40,7 @@ const el = <T extends HTMLElement>(tag: string, className?: string, text?: strin
 
 /** Editor de teclas: lista os controles com a tecla de cada um e deixa trocá-la (salva na hora). */
 export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
-  root.innerHTML = TEMPLATE;
+  root.innerHTML = template();
   const body = root.querySelector<HTMLElement>(".editor-body")!;
   const statusEl = root.querySelector<HTMLElement>(".editor-status")!;
   const picker = root.querySelector<HTMLElement>(".key-picker")!;
@@ -60,7 +62,7 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
     const available = new Set(config?.controles ?? []);
     const sections = CONTROL_GROUPS.map((group) => {
       const section = el("section");
-      section.append(el("h3", undefined, group));
+      section.append(el("h3", undefined, groupName(group)));
       for (const control of CONTROLS.filter((c) => c.group === group && available.has(c.id))) {
         const row = el<HTMLButtonElement>("button", "row");
         row.type = "button";
@@ -101,7 +103,7 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
     try {
       mapa = await deps.save(next);
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : "não consegui salvar");
+      setStatus(e instanceof Error ? e.message : t("editor.error.save"));
       return;
     }
     picker.hidden = true;
@@ -123,14 +125,14 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
         : Object.entries(mapa)
             .filter(([control, key]) => key === keyId && control !== editing)
             .map(([control]) => controlLabel(control));
-    void commit(next, others.length ? `Também usada em: ${others.join(", ")}` : "");
+    void commit(next, others.length ? t("editor.warning.sharedKey", { others: others.join(", ") }) : "");
   }
 
   body.addEventListener("click", (e) => {
     const row = (e.target as Element).closest<HTMLElement>("[data-control]");
     if (!row?.dataset.control) return;
     editing = row.dataset.control;
-    pickerTitle.textContent = `Tecla para ${controlLabel(editing)}`;
+    pickerTitle.textContent = t("editor.picker.title", { control: controlLabel(editing) });
     renderKeys(mapa[editing]);
     picker.hidden = false;
   });
@@ -152,13 +154,13 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
     async open() {
       root.hidden = false;
       picker.hidden = true;
-      setStatus("Carregando…");
+      setStatus(t("editor.loading"));
       body.replaceChildren();
       try {
         config = await deps.load();
       } catch (e) {
         config = null;
-        setStatus(e instanceof Error ? e.message : "não consegui carregar as teclas");
+        setStatus(e instanceof Error ? e.message : t("editor.error.load"));
         return;
       }
       mapa = config.mapa;

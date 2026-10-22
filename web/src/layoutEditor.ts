@@ -1,4 +1,5 @@
 import { tick } from "svelte";
+import { t } from "./i18n";
 import { limitScale, limitShift, minScaleFor, scaleRatio, snapShift, type Rect, type Shift } from "./layoutGeometry";
 import { adjustOf, controlOffset, controlsOf, MAX_SCALE, type ControlId, type GroupId } from "./layoutModel";
 import type { LayoutStore } from "./layoutStore.svelte";
@@ -151,7 +152,7 @@ export function mountLayoutEditor({ pad, store, appSize, bounds, onGuides }: Opt
   const renderLock = (id: GroupId, lock: HTMLElement) => {
     const open = unlocked.has(id);
     lock.setAttribute("aria-pressed", String(open));
-    lock.setAttribute("aria-label", open ? "Travar o grupo" : "Soltar os botões do grupo");
+    lock.setAttribute("aria-label", t(open ? "layoutEditor.lock" : "layoutEditor.unlock"));
     lock.innerHTML = open ? UNLOCKED_ICON : LOCKED_ICON;
     groupEl(id)?.toggleAttribute("data-solto", open);
   };

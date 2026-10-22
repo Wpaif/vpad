@@ -1,4 +1,5 @@
 import { TOKEN_FORMAT } from "./auth";
+import { t } from "./i18n";
 
 type FetchFn = typeof fetch;
 
@@ -28,7 +29,7 @@ export async function pairDevice(code: string, name: string, fetchFn: FetchFn = 
       body: JSON.stringify({ codigo: code, nome: name }),
     });
   } catch {
-    throw new PairingError("Sem conexão com o PC.");
+    throw new PairingError(t("pairing.error.offline"));
   }
   const body = (await res.json().catch(() => ({}))) as {
     token?: unknown;
@@ -38,31 +39,29 @@ export async function pairDevice(code: string, name: string, fetchFn: FetchFn = 
   };
 
   if (res.status === 401) {
-    throw new PairingError("Código incorreto ou expirado. Confira o código que aparece no terminal do PC.");
+    throw new PairingError(t("pairing.error.wrongCode"));
   }
   if (res.status === 403) {
     if (typeof body.erro === "string" && /fechado/i.test(body.erro)) {
-      throw new PairingError(
-        "O pareamento está fechado. No PC, pressione Enter no terminal do vpad para abri-lo e use o código novo.",
-      );
+      throw new PairingError(t("pairing.error.closed"));
     }
-    throw new PairingError("O pedido foi negado no PC.");
+    throw new PairingError(t("pairing.error.denied"));
   }
   if (res.status === 408) {
-    throw new PairingError("Ninguém aprovou o pedido no PC a tempo. Abra o pareamento de novo no PC e tente outra vez.");
+    throw new PairingError(t("pairing.error.expired"));
   }
   if (res.status === 409) {
-    throw new PairingError("Já há outro pedido esperando aprovação no PC. Tente de novo em instantes.");
+    throw new PairingError(t("pairing.error.busy"));
   }
   if (res.status === 429) {
     const seconds = Number(body.segundos ?? res.headers.get("Retry-After")) || 60;
-    const error = new PairingError(`Muitas tentativas erradas. Espere ${seconds} s.`);
+    const error = new PairingError(t("pairing.error.rateLimited", { seconds }));
     error.retryAfter = seconds;
     throw error;
   }
-  if (!res.ok) throw new PairingError(`Não consegui parear (${res.status}).`);
+  if (!res.ok) throw new PairingError(t("pairing.error.http", { status: res.status }));
   if (typeof body.token !== "string" || !TOKEN_FORMAT.test(body.token)) {
-    throw new PairingError("Resposta inesperada do servidor.");
+    throw new PairingError(t("pairing.error.badResponse"));
   }
   const id = typeof body.id === "string" && DEVICE_ID.test(body.id) ? body.id : "";
   return { token: body.token, id };
@@ -116,14 +115,14 @@ export function mountPairing(root: HTMLElement, deps: PairingDeps): Pairing {
     if (busy || blocked || input.value.length !== CODE_LENGTH) return;
     busy = true;
     // com o código certo o pedido vai para o terminal do PC e a resposta só sai depois do "sim"
-    alertEl.textContent = "Se o código estiver certo, aprove o pedido no PC: ele aparece no terminal.";
+    alertEl.textContent = t("pairing.waiting");
     sync();
     try {
       const paired = await deps.pair(input.value);
       alertEl.textContent = "";
       deps.onPaired(paired);
     } catch (error) {
-      alertEl.textContent = error instanceof Error ? error.message : "Não consegui parear.";
+      alertEl.textContent = error instanceof Error ? error.message : t("pairing.error.fallback");
       input.value = "";
       const wait = (error as PairingError).retryAfter;
       if (wait) {

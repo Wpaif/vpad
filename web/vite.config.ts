@@ -1,6 +1,6 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
-import { portaDoServidor, proxyDoServidor } from "./vite.proxy";
+import { portaDoServidor, proxyDoServidor } from "./vite.proxy.ts";
 
 export default defineConfig({
   plugins: [svelte()],

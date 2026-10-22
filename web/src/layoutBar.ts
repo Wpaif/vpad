@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import type { LayoutStore } from "./layoutStore.svelte";
 
 interface Options {
@@ -37,7 +38,7 @@ export function mountLayoutBar({ bar, editButton, store, onChange, onSaved }: Op
   });
   bar.querySelector("[data-act=save]")?.addEventListener("click", () => {
     const saved = store.save();
-    say(saved ? "" : "Não foi possível salvar neste navegador.");
+    say(saved ? "" : t("layoutBar.saveFailed"));
     sync();
     if (saved) onSaved?.();
   });
