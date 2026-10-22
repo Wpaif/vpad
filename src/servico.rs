@@ -1,6 +1,7 @@
 //! Consome os eventos do celular e os entrega ao controle virtual, trocando o
 //! dispositivo quando o celular pede outro perfil.
 
+use crate::{mensagens::txt, tr};
 use std::{io, sync::Arc};
 
 use tokio::sync::{mpsc::Receiver, watch};
@@ -26,11 +27,11 @@ pub type Fabrica = Box<dyn Fn(&'static Perfil) -> io::Result<Box<dyn Dispositivo
 /// de um botão representam o que está sendo digitado e não devem virar histórico.
 fn categoria(evento: &Evento) -> &'static str {
     match evento {
-        Evento::Botao { .. } => "botão",
-        Evento::Eixo { .. } => "eixo",
+        Evento::Botao { .. } => txt("botão", "button"),
+        Evento::Eixo { .. } => txt("eixo", "axis"),
         Evento::Ping => "ping",
-        Evento::TrocarPerfil(_) => "troca de perfil",
-        Evento::SoltarTudo => "soltar tudo",
+        Evento::TrocarPerfil(_) => txt("troca de perfil", "profile change"),
+        Evento::SoltarTudo => txt("soltar tudo", "release all"),
     }
 }
 
@@ -60,7 +61,14 @@ pub async fn processar(
                 let Some(evento) = evento else { break };
                 let Evento::TrocarPerfil(pedido) = evento else {
                     if let Err(e) = dispositivo.aplicar(evento) {
-                        eprintln!("erro ao aplicar {} ao controle virtual: {e}", categoria(&evento));
+                        eprintln!(
+                            "{}",
+                            tr!(
+                                "erro ao aplicar {} ao controle virtual: {e}",
+                                "error applying {} to the virtual controller: {e}",
+                                categoria(&evento)
+                            )
+                        );
                     }
                     continue;
                 };
@@ -77,7 +85,7 @@ pub async fn processar(
                             dispositivo = novo;
                             escolhido = pedido;
                         }
-                        Some(Err(e)) => eprintln!("não consegui trocar de perfil: {e}"),
+                        Some(Err(e)) => eprintln!("{}", tr!("não consegui trocar de perfil: {e}", "could not switch profile: {e}")),
                         None => {}
                     }
                 }
@@ -261,5 +269,19 @@ mod testes {
         assert_eq!(categoria(&Evento::Eixo { id: 5, valor: -1234 }), "eixo");
         assert_eq!(categoria(&Evento::Ping), "ping");
         assert_eq!(categoria(&Evento::SoltarTudo), "soltar tudo");
+    }
+
+    #[test]
+    fn a_categoria_do_log_em_ingles() {
+        use crate::{idiomas::Idioma, mensagens::com_idioma};
+        com_idioma(Idioma::En, || {
+            assert_eq!(categoria(&Evento::Botao { id: 7, pressionado: true }), "button");
+            assert_eq!(categoria(&Evento::Eixo { id: 5, valor: 1 }), "axis");
+            assert_eq!(categoria(&Evento::Ping), "ping");
+            assert_eq!(categoria(&Evento::TrocarPerfil(1)), "profile change");
+            assert_eq!(categoria(&Evento::SoltarTudo), "release all");
+        });
+        // em português continua como sempre
+        assert_eq!(categoria(&Evento::Botao { id: 7, pressionado: true }), "botão");
     }
 }

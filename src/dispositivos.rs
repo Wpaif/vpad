@@ -2,6 +2,7 @@
 //! servidor guarda apenas o hash SHA-256: quem ler o arquivo não consegue usar os tokens, e
 //! cada aparelho pode ser revogado sem afetar os outros.
 
+use crate::tr;
 use std::{
     fs,
     io::{self, Read, Write},
@@ -170,7 +171,7 @@ impl Dispositivos {
     /// Carrega o arquivo; se não existir ou estiver inválido, começa vazio (ninguém pareado).
     pub fn com_arquivo(arquivo: PathBuf) -> Self {
         let mut lista = ler(&arquivo).unwrap_or_else(|e| {
-            eprintln!("ignorando {}: {e}", arquivo.display());
+            eprintln!("{}", tr!("ignorando {}: {e}", "ignoring {}: {e}", arquivo.display()));
             vec![]
         });
         let vistos = ler_vistos(&arquivo);

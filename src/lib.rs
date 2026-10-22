@@ -2,6 +2,7 @@ mod api;
 pub mod acesso;
 pub mod aprovacao;
 pub mod alerta;
+pub mod avisos;
 pub mod armazem;
 pub mod cli;
 pub mod configuracao;

@@ -1,6 +1,7 @@
 //! Guarda o mapa de teclas: em memória (compartilhado com o serviço por um canal `watch`)
 //! e, se houver arquivo, em disco, para sobreviver a reinícios.
 
+use crate::tr;
 use std::{
     collections::BTreeMap,
     fs, io,
@@ -29,7 +30,7 @@ impl ArmazemMapa {
             Ok(Some(m)) => m,
             Ok(None) => Mapa::padrao(),
             Err(e) => {
-                eprintln!("ignorando {}: {e}", arquivo.display());
+                eprintln!("{}", tr!("ignorando {}: {e}", "ignoring {}: {e}", arquivo.display()));
                 Mapa::padrao()
             }
         };

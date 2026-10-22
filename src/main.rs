@@ -8,6 +8,7 @@ use std::{
 use tokio::sync::{mpsc, watch};
 use vpad::{
     acesso::Acesso,
+    avisos,
     armazem::{ArmazemMapa, caminho_da_config},
     layout::{ArmazemLayout, caminho_do_layout},
     cli::tabela_de_dispositivos,
@@ -60,6 +61,8 @@ fn agora() -> u64 {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    // o idioma do terminal vem antes de tudo: até os erros dos argumentos saem nele
+    vpad::mensagens::definir_idioma_do_terminal(vpad::mensagens::detectar(|nome| std::env::var(nome).ok()));
     let opcoes = opcoes_dos_argumentos(std::env::args().skip(1)).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(2);
@@ -74,7 +77,7 @@ async fn main() -> io::Result<()> {
     let dispositivos = match caminho_dos_dispositivos(xdg.as_deref(), home.as_deref()) {
         Some(arquivo) => Dispositivos::com_arquivo(arquivo),
         None => {
-            eprintln!("aviso: sem HOME, os aparelhos pareados não serão salvos");
+            eprintln!("{}", avisos::sem_home_para_aparelhos());
             Dispositivos::em_memoria()
         }
     };
@@ -85,24 +88,23 @@ async fn main() -> io::Result<()> {
             return Ok(());
         }
         Acao::Revogar(Alvo::Todos) => {
-            println!("{} dispositivo(s) revogado(s)", dispositivos.revogar_todos()?);
+            println!("{}", avisos::dispositivos_revogados(dispositivos.revogar_todos()?));
             return Ok(());
         }
         Acao::Revogar(Alvo::Id(id)) => {
             if dispositivos.revogar(&id)? {
-                println!("dispositivo {id} revogado");
+                println!("{}", avisos::dispositivo_revogado(&id));
                 return Ok(());
             }
-            eprintln!("nenhum dispositivo com o id {id} (veja os ids com: vpad --dispositivos)");
+            eprintln!("{}", avisos::nenhum_dispositivo_com_o_id(&id));
             std::process::exit(1);
         }
         Acao::Teclado { id, permitir } => {
             if dispositivos.definir_teclado(&id, permitir)? {
-                let estado = if permitir { "liberado" } else { "bloqueado" };
-                println!("modo teclado {estado} para o dispositivo {id}");
+                println!("{}", avisos::modo_teclado_do_dispositivo(permitir, &id));
                 return Ok(());
             }
-            eprintln!("nenhum dispositivo com o id {id} (veja os ids com: vpad --dispositivos)");
+            eprintln!("{}", avisos::nenhum_dispositivo_com_o_id(&id));
             std::process::exit(1);
         }
         Acao::Servir => {}
@@ -120,7 +122,7 @@ async fn main() -> io::Result<()> {
 
     let armazem = Arc::new(match caminho_da_config(xdg.as_deref(), home.as_deref()) {
         Some(arquivo) => {
-            println!("teclas salvas em {}", arquivo.display());
+            println!("{}", avisos::teclas_salvas_em(&arquivo.display().to_string()));
             ArmazemMapa::com_arquivo(arquivo)
         }
         None => ArmazemMapa::em_memoria(),
@@ -128,7 +130,7 @@ async fn main() -> io::Result<()> {
 
     let layout = Arc::new(match caminho_do_layout(xdg.as_deref(), home.as_deref()) {
         Some(arquivo) => {
-            println!("layout dos botões salvo em {}", arquivo.display());
+            println!("{}", avisos::layout_salvo_em(&arquivo.display().to_string()));
             ArmazemLayout::com_arquivo(arquivo)
         }
         None => ArmazemLayout::em_memoria(),
@@ -144,9 +146,9 @@ async fn main() -> io::Result<()> {
         })
     };
     let dispositivo = fabrica(perfil).map_err(|e| {
-        eprintln!("não consegui criar o controle virtual: {e}");
-        eprintln!("verifique se o módulo uinput está carregado (sudo modprobe uinput)");
-        eprintln!("e se seu usuário tem permissão de escrita em /dev/uinput");
+        for linha in avisos::nao_criou_o_controle_virtual(&e.to_string()) {
+            eprintln!("{linha}");
+        }
         e
     })?;
 
@@ -166,12 +168,12 @@ async fn main() -> io::Result<()> {
     });
     match vpad::vigiar_revogacoes(acesso.clone()) {
         Ok(_) => {}
-        Err(e) => eprintln!("aviso: sem inotify ({e}); a revogação leva até 2 s"),
+        Err(e) => eprintln!("{}", avisos::sem_inotify(&e.to_string(), RECARGA_DOS_DISPOSITIVOS.as_secs())),
     }
 
     // HTTPS com uma autoridade própria: o celular a instala uma vez (pela página de configuração).
     let Some(pasta_tls) = pasta_do_tls(xdg.as_deref(), home.as_deref()) else {
-        eprintln!("sem HOME não há onde guardar o certificado; defina HOME ou XDG_CONFIG_HOME");
+        eprintln!("{}", avisos::sem_home_para_o_certificado());
         std::process::exit(1);
     };
     let ips = ips_da_rede();
@@ -192,34 +194,32 @@ async fn main() -> io::Result<()> {
     let url = url_do_controle(&ip, porta_https);
     let url_config = url_de_configuracao(&ip, porta);
     println!("{}", qr_em_texto(&url));
-    println!("perfil: {} ({:04x}:{:04x})", perfil.nome, perfil.fabricante, perfil.produto);
-    println!("controle (HTTPS): {url}");
+    println!("{}", avisos::linha_do_perfil(perfil.nome, perfil.fabricante, perfil.produto));
+    println!("{}", avisos::controle_https(&url));
     if material.ca_antiga_sem_restricoes {
-        println!("AUTORIDADE ANTIGA (sem restrição de nomes) SUBSTITUÍDA por uma que só vale para a rede local:");
-        println!("remova o perfil vpad antigo do celular e instale o novo");
+        for linha in avisos::autoridade_antiga_substituida() {
+            println!("{linha}");
+        }
     } else if material.ca_nova {
-        println!("AUTORIDADE DE CERTIFICAÇÃO NOVA: instale o perfil de novo em cada celular que já tinha o antigo");
+        println!("{}", avisos::autoridade_nova());
     } else if material.folha_renovada {
-        println!("certificado do servidor renovado (IP novo ou perto de vencer); os celulares não precisam fazer nada");
+        println!("{}", avisos::certificado_renovado());
     }
     let impressao = material.impressao_digital();
     let (primeira, segunda) = impressao.split_at(impressao.char_indices().filter(|(_, c)| *c == ':').nth(15).map_or(0, |(i, _)| i + 1));
-    println!("impressão digital (SHA-256) da autoridade, para conferir no celular antes de instalar o perfil:\n  {primeira}\n  {segunda}");
+    println!("{}", avisos::impressao_digital(primeira, segunda));
     for ip in &material.ips_ignorados {
-        eprintln!("aviso: o IP {ip} não é de rede local e ficou fora do certificado");
+        eprintln!("{}", avisos::ip_fora_do_certificado(&ip.to_string()));
     }
     let cobertos: Vec<String> = ips.iter().filter(|i| !material.ips_ignorados.contains(i)).map(ToString::to_string).collect();
-    println!("certificado válido para: {}", cobertos.join(", "));
-    println!("aparelhos pareados: {} (veja com: vpad --dispositivos)", acesso.dispositivos().listar().len());
+    println!("{}", avisos::certificado_valido_para(&cobertos.join(", ")));
+    println!("{}", avisos::aparelhos_pareados(acesso.dispositivos().listar().len()));
 
     // Primeira instalação do certificado: abre a página de configuração por um tempo.
     if material.ca_nova {
         match servidor_de_configuracao.abrir(DURACAO_DA_CONFIGURACAO) {
-            Ok(_) => println!(
-                "página de configuração do certificado aberta por {} s: abra no celular {url_config}",
-                DURACAO_DA_CONFIGURACAO.as_secs()
-            ),
-            Err(e) => eprintln!("não consegui abrir a página de configuração: {e}"),
+            Ok(_) => println!("{}", avisos::pagina_de_configuracao_aberta(DURACAO_DA_CONFIGURACAO.as_secs(), &url_config)),
+            Err(e) => eprintln!("{}", avisos::nao_abriu_a_pagina_de_configuracao(&e.to_string())),
         }
     }
     if opcoes.parear_ao_iniciar {
@@ -246,7 +246,7 @@ async fn main() -> io::Result<()> {
             imprimir(para_a_entrada.linha(&linha, agora()));
         }
         // entrada fechada (rodando sem terminal): só dá para parear com --parear
-        println!("\r\x1b[2Kaviso: sem entrada de terminal; o pareamento só abre com a opção --parear");
+        println!("{}", avisos::sem_entrada_de_terminal());
     });
 
     https::servir(listener_https, tls_config, vpad::app_completo(tx, perfil_rx, armazem, layout, acesso)).await

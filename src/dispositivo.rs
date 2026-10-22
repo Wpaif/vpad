@@ -1,6 +1,7 @@
 //! Gamepad virtual no Linux (uinput), com a identidade de um controle Xbox 360
 //! para que Steam, emuladores e jogos o reconheçam sem configuração.
 
+use crate::{mensagens::txt, tr};
 use std::{io, path::PathBuf};
 
 use evdev::{
@@ -37,7 +38,7 @@ fn info_do_eixo(perfil: &Perfil, eixo: Abs, faixa: Faixa) -> AbsInfo {
 impl Gamepad {
     pub fn novo(perfil: &'static Perfil) -> io::Result<Self> {
         if perfil.tipo != Tipo::Gamepad {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "o perfil não é de gamepad"));
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, txt("o perfil não é de gamepad", "the profile is not a gamepad")));
         }
         let mut teclas = AttributeSet::new();
         teclas_do_perfil(perfil).into_iter().for_each(|k| teclas.insert(k));
@@ -105,7 +106,7 @@ pub struct Teclado {
 impl Teclado {
     pub fn novo(perfil: &'static Perfil, mapa: Mapa) -> io::Result<Self> {
         if perfil.tipo != Tipo::Teclado {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "o perfil não é de teclado"));
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, txt("o perfil não é de teclado", "the profile is not a keyboard")));
         }
         let mut teclas = AttributeSet::new();
         TECLAS.iter().for_each(|t| teclas.insert(t.codigo));
@@ -154,7 +155,7 @@ impl Dispositivo for Teclado {
 
     fn definir_mapa(&mut self, mapa: &Mapa) {
         if let Err(e) = Teclado::definir_mapa(self, mapa) {
-            eprintln!("erro ao aplicar o mapa de teclas: {e}");
+            eprintln!("{}", tr!("erro ao aplicar o mapa de teclas: {e}", "error applying the key map: {e}"));
         }
     }
 }
