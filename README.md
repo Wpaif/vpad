@@ -3,6 +3,8 @@
 [![CI](https://github.com/Wpaif/vpad/actions/workflows/ci.yml/badge.svg)](https://github.com/Wpaif/vpad/actions/workflows/ci.yml)
 [![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
 
+**Português** · [English](README.en.md) · [Español](README.es.md) · [中文](README.zh-CN.md) · [日本語](README.ja.md) · [한국어](README.ko.md)
+
 Controle virtual para o PC, no celular. O iPhone abre uma página (ou um app na Tela de Início),
 manda os toques pela rede local, e um servidor em Rust no PC cria um **gamepad ou teclado virtual**
 (uinput, Linux) que qualquer jogo ou programa enxerga como um dispositivo de verdade.
@@ -313,6 +315,13 @@ Na API, toda resposta de erro traz um `codigo` estável (por exemplo
 `pareamento_fechado`, `mapa_invalido`, `gravacao_falhou`) além da mensagem em português, e a página
 traduz pelo código. Os rótulos de tecla (`Espaço`, `Apagar`) e os nomes dos grupos de teclas
 também são traduzidos na página (`web/src/keyNames.ts`).
+
+O **README** tem traduções para os outros cinco idiomas (`README.en.md`, `README.es.md`,
+`README.zh-CN.md`, `README.ja.md` e `README.ko.md`), ligadas pela barra de idiomas do topo. Elas cobrem
+tudo que o usuário lê (do começo até os problemas comuns e a licença) e trazem só um resumo da parte de
+desenvolvimento, que fica neste arquivo. Ao mudar uma dessas seções aqui, atualize as traduções: o teste
+`web/readme.test.ts` confere que todas têm as mesmas seções, os mesmos comandos, as mesmas tabelas e os
+mesmos nomes de opções e arquivos, e que não sobrou texto em português nelas.
 
 Fluxo de trabalho do projeto: uma branch por funcionalidade (`feature/<nome>`), testes escritos
 antes da implementação, e merge na `master` só com os testes passando.
