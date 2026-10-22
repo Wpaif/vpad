@@ -72,6 +72,27 @@ git checkout -q --detach
 echo d > d.txt; git add d.txt
 verifica "permite commit com HEAD solto (detached)" 0 git commit -q -m detached
 
+# instalação por cópia: protege até checkouts que não têm a pasta .githooks (o caso que o hooksPath não cobre)
+echo
+echo "instalação (scripts/instalar-hooks.sh):"
+instala() { rm -rf "$tmp/i"; mkdir "$tmp/i"; cd "$tmp/i" || exit 1
+  git init -q -b master; git config user.name teste; git config user.email teste@example.com
+  echo base > a.txt; git add a.txt; }
+instala
+verifica "o instalador roda e diz onde pôs o hook" 0 "$raiz/scripts/instalar-hooks.sh" "$tmp/i"
+verifica "o hook foi copiado para .git/hooks e é executável" 0 test -x "$tmp/i/.git/hooks/pre-commit"
+verifica "bloqueia na master mesmo sem a pasta .githooks no checkout" 1 git commit -q -m "direto"
+verifica "nada foi commitado" 1 git rev-parse -q --verify HEAD
+git checkout -q -b feature/z
+verifica "permite commit numa branch" 0 git commit -q -m "ok"
+git checkout -q master
+verifica "merge na master continua livre" 0 git merge --no-ff -q feature/z -m "merge"
+verifica "rodar o instalador de novo é inofensivo" 0 "$raiz/scripts/instalar-hooks.sh" "$tmp/i"
+git config core.hooksPath .githooks
+verifica "o instalador desfaz o core.hooksPath que sobrepõe o .git/hooks" 0 "$raiz/scripts/instalar-hooks.sh" "$tmp/i"
+verifica "core.hooksPath ficou sem valor" 1 git config --get core.hooksPath
+verifica "recusa um diretório que não é repositório git" 1 "$raiz/scripts/instalar-hooks.sh" "$tmp"
+
 echo
 if [ "$falhas" -eq 0 ]; then echo "tudo certo: $total verificações"; exit 0; fi
 echo "$falhas de $total verificações falharam"; exit 1

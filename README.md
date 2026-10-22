@@ -307,8 +307,9 @@ Fluxo de trabalho do projeto: uma branch por funcionalidade (`feature/<nome>`), 
 antes da implementação, e merge na `master` só com os testes passando.
 
 O repositório bloqueia **commit direto na `master`** (hook `.githooks/pre-commit`): o trabalho entra
-por uma branch e chega na `master` por merge, que o hook não atrapalha. Depois de clonar, ative-o
-uma vez com `make hooks` (ou `git config core.hooksPath .githooks`). Numa emergência, de propósito:
+por uma branch e chega na `master` por merge, que o hook não atrapalha. Depois de clonar, instale-o
+uma vez com `make hooks` (ele é copiado para `.git/hooks`; rode de novo se o arquivo mudar). Numa
+emergência, de propósito:
 `VPAD_PERMITIR_COMMIT_NA_MASTER=1 git commit ...`. O teste do hook é `./scripts/testar-hooks.sh`
 (já incluído em `make test`).
 

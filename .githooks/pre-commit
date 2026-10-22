@@ -1,8 +1,8 @@
 #!/bin/sh
 # Bloqueia commit direto na master: todo trabalho entra por uma branch (feature/<nome>, fix/<nome>…)
 # e chega na master por merge. Não atrapalha merges (que passam pelo pre-merge-commit) nem a
-# conclusão de um merge com conflito. Para ativar neste clone: make hooks
-# (ou: git config core.hooksPath .githooks).
+# conclusão de um merge com conflito. Para instalar neste clone: make hooks
+# (copia este arquivo para .git/hooks; rode de novo se ele mudar).
 
 ramo=$(git symbolic-ref --short -q HEAD || true)
 [ "$ramo" = "master" ] || exit 0

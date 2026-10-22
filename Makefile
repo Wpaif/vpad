@@ -6,9 +6,9 @@ test:
 	cd web && npm test
 	./scripts/testar-hooks.sh
 
-# Ativa neste clone o bloqueio de commit direto na master (.githooks/pre-commit).
+# Instala neste clone o bloqueio de commit direto na master (.githooks/pre-commit -> .git/hooks).
 hooks:
-	git config core.hooksPath .githooks
+	./scripts/instalar-hooks.sh
 
 # Dependências Rust contra o banco de vulnerabilidades do RustSec.
 audit:
