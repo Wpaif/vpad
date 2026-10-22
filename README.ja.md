@@ -59,6 +59,19 @@ PC を再起動しても権限を保ちたい場合は、ACL による権限（�
 
 ## インストール
 
+### ビルド済みバイナリ（Linux x86_64）
+
+使うだけなら、[最新のリリース](https://github.com/Wpaif/vpad/releases/latest)からパッケージ（`vpad-X.Y.Z-linux-x86_64.tar.gz`。隣に `.sha256` があります）をダウンロードし、チェックサムを確認して展開します。Rust や Node は不要ですが、[必要なもの](#必要なもの)にある `uinput` の設定は引き続き必要です。そのあとは[初めて使うとき](#初めて使うとき)に進んでください。
+
+```sh
+sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256
+tar xzf vpad-X.Y.Z-linux-x86_64.tar.gz
+cd vpad-X.Y.Z-linux-x86_64
+./vpad
+```
+
+### ソースからビルドする
+
 プロジェクトをダウンロードしてフォルダーに移動します:
 
 ```sh

@@ -58,6 +58,19 @@ sudo setfacl -m u:$USER:rw /dev/uinput
 
 ## 安装
 
+### 现成的可执行文件（Linux x86_64）
+
+如果你只想使用它，请从[最新版本](https://github.com/Wpaif/vpad/releases/latest)下载压缩包（`vpad-X.Y.Z-linux-x86_64.tar.gz`，旁边有对应的 `.sha256` 文件），核对校验和并解压。不需要 Rust 或 Node，但仍然需要[系统要求](#系统要求)中的 `uinput` 设置。之后请按[首次使用](#首次使用)操作。
+
+```sh
+sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256
+tar xzf vpad-X.Y.Z-linux-x86_64.tar.gz
+cd vpad-X.Y.Z-linux-x86_64
+./vpad
+```
+
+### 从源码编译
+
 下载项目并进入目录：
 
 ```sh

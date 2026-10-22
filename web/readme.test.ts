@@ -14,8 +14,9 @@ describe("README", () => {
   it("a instalação começa por baixar o projeto e entrar na pasta", () => {
     const instalacao = readme.slice(readme.indexOf("## Instalação"), readme.indexOf("## Primeiro uso"));
     expect(instalacao.indexOf("git clone")).toBeGreaterThan(-1);
-    expect(instalacao.indexOf("cd vpad")).toBeGreaterThan(instalacao.indexOf("git clone"));
-    expect(instalacao.indexOf("npm run build")).toBeGreaterThan(instalacao.indexOf("cd vpad"));
+    // a linha exata `cd vpad` (a do binário pronto é `cd vpad-X.Y.Z-linux-x86_64`, e vem antes)
+    expect(instalacao.indexOf("\ncd vpad\n")).toBeGreaterThan(instalacao.indexOf("git clone"));
+    expect(instalacao.indexOf("npm run build")).toBeGreaterThan(instalacao.indexOf("\ncd vpad\n"));
   });
 
   it("tem o selo do CI apontando para o workflow que existe", () => {
@@ -187,5 +188,34 @@ describe("traduções do README", () => {
     const alvos = [...raiz(arquivo).matchAll(/\]\(([^)#]+)\)/g)].map((m) => m[1]!).filter((a) => !/^https?:/.test(a));
     expect(alvos.length).toBeGreaterThan(2);
     for (const alvo of alvos) expect(existsSync(`../${alvo}`), `${arquivo}: ${alvo}`).toBe(true);
+  });
+});
+
+describe("binário pronto na instalação", () => {
+  it.each(IDIOMAS)("$arquivo explica o binário do release, com a soma conferida, sem Rust nem Node", ({ arquivo }) => {
+    const md = raiz(arquivo);
+    expect(md).toContain("https://github.com/Wpaif/vpad/releases/latest");
+    const comandos = linhasDeComando(blocosDeCodigo(md));
+    for (const linha of [
+      "sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256",
+      "tar xzf vpad-X.Y.Z-linux-x86_64.tar.gz",
+      "cd vpad-X.Y.Z-linux-x86_64",
+      "./vpad",
+    ]) {
+      expect(comandos, `${arquivo}: ${linha}`).toContain(linha);
+    }
+    expect(md, arquivo).toMatch(/^### .+$/m); // a instalação ganhou duas subseções
+  });
+
+  it.each(IDIOMAS)("$arquivo: o binário vem antes de compilar (quem só quer usar não precisa ler o resto)", ({ arquivo }) => {
+    const md = raiz(arquivo);
+    expect(md.indexOf("tar xzf vpad-X.Y.Z"), arquivo).toBeGreaterThan(-1);
+    expect(md.indexOf("tar xzf vpad-X.Y.Z"), arquivo).toBeLessThan(md.indexOf("git clone https://github.com/Wpaif/vpad.git"));
+  });
+
+  it("o README em português documenta o workflow de release", () => {
+    const md = raiz("README.md");
+    expect(md).toContain(".github/workflows/release.yml");
+    expect(md).toMatch(/Run workflow/);
   });
 });
