@@ -14,6 +14,8 @@ use crate::{
     acesso::Acesso,
     aprovacao::{Decisao, Tipo},
     cli::linha_do_codigo,
+    mensagens::txt,
+    tr,
     configuracao::ServidorDeConfiguracao,
 };
 
@@ -70,6 +72,12 @@ pub struct Console {
     estado: Mutex<Estado>,
 }
 
+/// "Sim e liberar o modo teclado": `t` (de teclado) ou `k` (de keyboard), para quem usa o terminal
+/// em português ou em inglês.
+fn liberar_teclado(resposta: &str) -> bool {
+    matches!(resposta.trim().to_lowercase().as_str(), "t" | "teclado" | "k" | "keyboard")
+}
+
 fn afirmativa(resposta: &str) -> bool {
     matches!(resposta.trim().to_lowercase().as_str(), "s" | "sim" | "y" | "yes")
 }
@@ -80,16 +88,26 @@ impl Console {
     }
 
     fn ajuda() -> Vec<Saida> {
+        let (abrir, certificado) = (DURACAO_DO_PAREAMENTO / 60, DURACAO_DA_CONFIGURACAO.as_secs() / 60);
         [
-            "comandos (digite e tecle Enter):",
-            "  Enter  abrir o pareamento por 2 minutos (mostra o código para digitar no celular)",
-            "  f      fechar o pareamento agora",
-            "  c      abrir por 5 minutos a página que instala o certificado no celular",
-            "  ?      esta ajuda",
-            "quando um celular pedir aprovação: s = sim, t = sim e liberar o modo teclado, outra tecla = negar",
+            tr!("comandos (digite e tecle Enter):", "commands (type and press Enter):"),
+            tr!(
+                "  Enter  abrir o pareamento por {abrir} minutos (mostra o código para digitar no celular)",
+                "  Enter  open pairing for {abrir} minutes (shows the code to type on the phone)"
+            ),
+            tr!("  f      fechar o pareamento agora", "  f      close pairing now"),
+            tr!(
+                "  c      abrir por {certificado} minutos a página que instala o certificado no celular",
+                "  c      open the certificate setup page for {certificado} minutes (installs the certificate on the phone)"
+            ),
+            tr!("  ?      esta ajuda", "  ?      this help"),
+            tr!(
+                "quando um celular pedir aprovação: s = sim, t = sim e liberar o modo teclado, outra tecla = negar",
+                "when a phone asks for approval: y = yes, k = yes and allow keyboard mode, any other key = deny"
+            ),
         ]
         .into_iter()
-        .map(|l| Saida::Linha(l.to_string()))
+        .map(Saida::Linha)
         .collect()
     }
 
@@ -98,16 +116,16 @@ impl Console {
         // Com um pedido esperando, a linha é a resposta a ele: negar é o padrão.
         if let Some(pedido) = self.acesso.aprovacoes().pendente() {
             let teclado = matches!(pedido.tipo, Tipo::Pareamento { .. })
-                && matches!(texto.trim().to_lowercase().as_str(), "t" | "teclado");
+                && liberar_teclado(texto);
             let (decisao, mensagem) = if teclado {
-                (Decisao::Aprovado { teclado: true }, "✓ aprovado, com o modo teclado liberado para o aparelho")
-            } else if afirmativa(texto) || matches!(pedido.tipo, Tipo::AtivarTeclado { .. }) && texto.trim().eq_ignore_ascii_case("t") {
-                (Decisao::Aprovado { teclado: false }, "✓ aprovado")
+                (Decisao::Aprovado { teclado: true }, txt("✓ aprovado, com o modo teclado liberado para o aparelho", "✓ approved, keyboard mode allowed for the device"))
+            } else if afirmativa(texto) || matches!(pedido.tipo, Tipo::AtivarTeclado { .. }) && liberar_teclado(texto) {
+                (Decisao::Aprovado { teclado: false }, txt("✓ aprovado", "✓ approved"))
             } else {
-                (Decisao::Negado, "pedido negado")
+                (Decisao::Negado, txt("pedido negado", "request denied"))
             };
             let aplicado = self.acesso.aprovacoes().responder(pedido.id, decisao);
-            let mensagem = if aplicado { mensagem } else { "o pedido já foi encerrado" };
+            let mensagem = if aplicado { mensagem } else { txt("o pedido já foi encerrado", "the request has already ended") };
             return vec![Saida::Linha(mensagem.to_string())];
         }
 
@@ -116,23 +134,30 @@ impl Console {
                 let ja_estava_aberto = self.acesso.pareamento().aberto(agora);
                 self.acesso.pareamento().abrir(agora, DURACAO_DO_PAREAMENTO);
                 let aviso = if ja_estava_aberto {
-                    format!("pareamento renovado por mais {DURACAO_DO_PAREAMENTO} s")
+                    tr!("pareamento renovado por mais {DURACAO_DO_PAREAMENTO} s", "pairing renewed for {DURACAO_DO_PAREAMENTO} s more")
                 } else {
-                    format!("pareamento ABERTO por {DURACAO_DO_PAREAMENTO} s: digite no celular o código abaixo")
+                    tr!(
+                        "pareamento ABERTO por {DURACAO_DO_PAREAMENTO} s: digite no celular o código abaixo",
+                        "pairing OPEN for {DURACAO_DO_PAREAMENTO} s: type the code below on the phone"
+                    )
                 };
                 vec![Saida::Linha(aviso)]
             }
-            "f" => {
+            "f" | "fechar" | "close" => {
                 self.acesso.pareamento().fechar();
-                vec![Saida::Linha("pareamento fechado".to_string())]
+                vec![Saida::Linha(txt("pareamento fechado", "pairing closed").to_string())]
             }
             "c" => match self.configurador.abrir(DURACAO_DA_CONFIGURACAO) {
-                Ok(_) => vec![Saida::Linha(format!(
+                Ok(_) => vec![Saida::Linha(tr!(
                     "página de configuração do certificado aberta por {} s: abra no celular {}",
+                    "certificate setup page open for {} s: open on the phone {}",
                     DURACAO_DA_CONFIGURACAO.as_secs(),
                     self.url_de_configuracao
                 ))],
-                Err(e) => vec![Saida::Linha(format!("não consegui abrir a página de configuração: {e}"))],
+                Err(e) => vec![Saida::Linha(tr!(
+                    "não consegui abrir a página de configuração: {e}",
+                    "could not open the setup page: {e}"
+                ))],
             },
             _ => Self::ajuda(),
         }
@@ -149,10 +174,13 @@ impl Console {
                 if estado.pedido_anunciado != Some(pedido.id) {
                     estado.pedido_anunciado = Some(pedido.id);
                     let opcoes = match pedido.tipo {
-                        Tipo::Pareamento { .. } => "[s] sim   [t] sim e liberar o modo teclado   [Enter ou outra tecla] negar",
-                        Tipo::AtivarTeclado { .. } => "[s] sim   [Enter ou outra tecla] negar",
+                        Tipo::Pareamento { .. } => txt(
+                            "[s] sim   [t] sim e liberar o modo teclado   [Enter ou outra tecla] negar",
+                            "[y] yes   [k] yes and allow keyboard mode   [Enter or any other key] deny",
+                        ),
+                        Tipo::AtivarTeclado { .. } => txt("[s] sim   [Enter ou outra tecla] negar", "[y] yes   [Enter or any other key] deny"),
                     };
-                    saidas.push(Saida::Linha(format!("⚠ pedido: {}\n  {opcoes}", pedido.descricao())));
+                    saidas.push(Saida::Linha(tr!("⚠ pedido: {}\n  {opcoes}", "⚠ request: {}\n  {opcoes}", pedido.descricao())));
                 }
                 return saidas;
             }
@@ -163,27 +191,32 @@ impl Console {
         if p.aberto(agora) {
             estado.pareamento_estava_aberto = true;
             estado.dica_inicial_mostrada = true; // quem abriu o pareamento já sabe como se faz
-            saidas.push(Saida::Atualiza(format!(
+            saidas.push(Saida::Atualiza(tr!(
                 "{}   [pareamento fecha em {} s]",
+                "{}   [pairing closes in {} s]",
                 linha_do_codigo(&p.codigo_atual(agora), p.segundos_restantes_do_codigo(agora)),
                 p.segundos_abertos_restantes(agora)
             )));
         } else if estado.pareamento_estava_aberto {
             estado.pareamento_estava_aberto = false;
-            saidas.push(Saida::Linha("pareamento FECHADO: pressione Enter para abrir de novo".to_string()));
+            saidas.push(Saida::Linha(txt(
+                "pareamento FECHADO: pressione Enter para abrir de novo",
+                "pairing CLOSED: press Enter to open it again",
+            ).to_string()));
         } else if !estado.dica_inicial_mostrada {
             estado.dica_inicial_mostrada = true;
-            saidas.push(Saida::Linha(
-                "pareamento FECHADO: pressione Enter para abrir por 2 minutos (c = página do certificado, ? = ajuda)"
-                    .to_string(),
-            ));
+            let minutos = DURACAO_DO_PAREAMENTO / 60;
+            saidas.push(Saida::Linha(tr!(
+                "pareamento FECHADO: pressione Enter para abrir por {minutos} minutos (c = página do certificado, ? = ajuda)",
+                "pairing CLOSED: press Enter to open it for {minutos} minutes (c = certificate page, ? = help)"
+            )));
         }
 
         if self.configurador.aberto() {
             estado.configuracao_estava_aberta = true;
         } else if estado.configuracao_estava_aberta {
             estado.configuracao_estava_aberta = false;
-            saidas.push(Saida::Linha("página de configuração fechada".to_string()));
+            saidas.push(Saida::Linha(txt("página de configuração fechada", "setup page closed").to_string()));
         }
         saidas
     }
@@ -369,6 +402,46 @@ mod testes {
     }
 
     #[tokio::test]
+    async fn k_e_keyboard_liberam_o_teclado_como_o_t_para_quem_usa_o_terminal_em_ingles() {
+        for resposta in ["t", "teclado", "k", "K", "keyboard", " Keyboard "] {
+            let (c, acesso, _) = console();
+            let tarefa = pedir(&acesso, pedido_de_pareamento("iPhone")).await;
+            c.linha(resposta, T0);
+            assert_eq!(tarefa.await.unwrap(), Ok(Decisao::Aprovado { teclado: true }), "{resposta:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn no_pedido_de_ativar_o_teclado_o_k_aprova_sem_liberar_nada_a_mais() {
+        for resposta in ["t", "k", "s", "y"] {
+            let (c, acesso, _) = console();
+            let pedido = Pedido { id: 0, tipo: Tipo::AtivarTeclado { nome: "iPhone".into() }, origem: None };
+            let tarefa = pedir(&acesso, pedido).await;
+            c.linha(resposta, T0);
+            assert_eq!(tarefa.await.unwrap(), Ok(Decisao::Aprovado { teclado: false }), "{resposta:?}");
+        }
+    }
+
+    #[test]
+    fn k_sem_pedido_nao_faz_nada_alem_de_mostrar_a_ajuda() {
+        let (c, acesso, _) = console();
+        let t = texto(&c.linha("k", T0));
+        assert!(!acesso.pareamento().aberto(T0));
+        assert!(t.contains("Enter"), "{t}");
+    }
+
+    #[test]
+    fn close_e_fechar_fecham_o_pareamento_como_o_f() {
+        for comando in ["f", "fechar", "close", " CLOSE "] {
+            let (c, acesso, _) = console();
+            c.linha("", T0);
+            assert!(acesso.pareamento().aberto(T0), "{comando:?}");
+            c.linha(comando, T0 + 1);
+            assert!(!acesso.pareamento().aberto(T0 + 1), "{comando:?}");
+        }
+    }
+
+    #[tokio::test]
     async fn qualquer_outra_resposta_nega_e_o_padrao_e_negar() {
         for resposta in ["", "n", "nao", "não", "talvez", "ss", " ", "tudo"] {
             let (c, acesso, _) = console();
@@ -459,5 +532,100 @@ mod testes {
             assert!(t.contains(comando), "{comando}: {t}");
         }
         assert!(!texto(&c.linha("ajuda", T0)).is_empty());
+    }
+
+    // ---------- terminal em inglês ----------
+
+    use crate::{idiomas::Idioma, mensagens::com_idioma};
+
+    fn em_ingles<R>(f: impl FnOnce() -> R) -> R {
+        com_idioma(Idioma::En, f)
+    }
+
+    #[test]
+    fn a_ajuda_em_ingles_mostra_as_letras_do_idioma_e_os_minutos_certos() {
+        let (c, _, _) = console();
+        let t = em_ingles(|| texto(&c.linha("?", T0)));
+        assert!(t.contains("commands (type and press Enter)"), "{t}");
+        assert!(t.contains("open pairing for 2 minutes"), "{t}");
+        assert!(t.contains("open the certificate setup page for 5 minutes"), "{t}");
+        assert!(t.contains("y = yes, k = yes and allow keyboard mode"), "{t}");
+        assert!(!t.contains("comandos") && !t.contains("sim"), "nada de português: {t}");
+    }
+
+    #[test]
+    fn a_ajuda_em_portugues_continua_igual() {
+        let (c, _, _) = console();
+        let t = texto(&c.linha("?", T0));
+        assert!(t.contains("comandos (digite e tecle Enter)"), "{t}");
+        assert!(t.contains("abrir o pareamento por 2 minutos"), "{t}");
+        assert!(t.contains("s = sim, t = sim e liberar o modo teclado"), "{t}");
+    }
+
+    #[tokio::test]
+    async fn respostas_de_aprovacao_em_ingles() {
+        for (resposta, esperado) in [
+            ("y", "approved"),
+            ("k", "keyboard mode allowed"),
+            ("n", "request denied"),
+            ("", "request denied"),
+        ] {
+            let (c, acesso, _) = console();
+            let _tarefa = pedir(&acesso, pedido_de_pareamento("iPhone")).await;
+            let t = em_ingles(|| texto(&c.linha(resposta, T0)));
+            assert!(t.contains(esperado), "{resposta:?}: {t}");
+            assert!(!t.contains("aprovado") && !t.contains("negado"), "{resposta:?}: {t}");
+        }
+    }
+
+    #[test]
+    fn abrir_renovar_e_fechar_o_pareamento_em_ingles() {
+        let (c, _, _) = console();
+        assert!(em_ingles(|| texto(&c.linha("", T0))).contains("pairing OPEN for 120 s: type the code below on the phone"));
+        assert!(em_ingles(|| texto(&c.linha("", T0 + 1))).contains("pairing renewed for 120 s more"));
+        assert!(em_ingles(|| texto(&c.linha("close", T0 + 2))).contains("pairing closed"));
+    }
+
+    #[tokio::test]
+    async fn o_anuncio_do_pedido_em_ingles_mostra_as_opcoes_do_idioma() {
+        let (c, acesso, _) = console();
+        let _tarefa = pedir(&acesso, pedido_de_pareamento("iPhone")).await;
+        let t = em_ingles(|| texto(&c.tique(T0)));
+        assert!(t.contains("request:"), "{t}");
+        assert!(t.contains("[y] yes   [k] yes and allow keyboard mode   [Enter or any other key] deny"), "{t}");
+        assert!(!t.contains("[s]"), "{t}");
+    }
+
+    #[tokio::test]
+    async fn o_anuncio_de_ativar_o_teclado_em_ingles_nao_oferece_liberar() {
+        let (c, acesso, _) = console();
+        let pedido = Pedido { id: 0, tipo: Tipo::AtivarTeclado { nome: "iPhone".into() }, origem: None };
+        let _tarefa = pedir(&acesso, pedido).await;
+        let t = em_ingles(|| texto(&c.tique(T0)));
+        assert!(t.contains("[y] yes   [Enter or any other key] deny"), "{t}");
+        assert!(!t.contains("[k]"), "{t}");
+    }
+
+    #[test]
+    fn o_tique_em_ingles_dica_o_fechamento_e_a_contagem() {
+        let (c, acesso, _) = console();
+        let dica = em_ingles(|| texto(&c.tique(T0)));
+        assert!(dica.contains("pairing CLOSED: press Enter to open it for 2 minutes (c = certificate page, ? = help)"), "{dica}");
+        acesso.pareamento().abrir(T0, 120);
+        let aberto = em_ingles(|| texto(&c.tique(T0 + 1)));
+        assert!(aberto.contains("pairing closes in"), "{aberto}");
+        acesso.pareamento().fechar();
+        let fechado = em_ingles(|| texto(&c.tique(T0 + 2)));
+        assert!(fechado.contains("pairing CLOSED: press Enter to open it again"), "{fechado}");
+    }
+
+    #[test]
+    fn a_pagina_do_certificado_em_ingles() {
+        let (c, _, falso) = console();
+        let aberta = em_ingles(|| texto(&c.linha("c", T0)));
+        assert!(aberta.contains("certificate setup page open for 300 s: open on the phone http://192.168.68.103:8080/"), "{aberta}");
+        *falso.falhar.lock().unwrap() = true;
+        let falha = em_ingles(|| texto(&c.linha("c", T0 + 1)));
+        assert!(falha.contains("could not open the setup page"), "{falha}");
     }
 }

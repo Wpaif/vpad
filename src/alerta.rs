@@ -3,6 +3,8 @@
 
 use std::{fmt, net::IpAddr, sync::Arc};
 
+use crate::{mensagens::txt, tr};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Alerta {
     /// código de pareamento errado; `erros` é a contagem na janela de 1 minuto
@@ -20,7 +22,7 @@ pub enum Alerta {
 }
 
 fn origem(o: &Option<IpAddr>) -> String {
-    o.map_or_else(|| "origem desconhecida".to_string(), |ip| format!("de {ip}"))
+    o.map_or_else(|| txt("origem desconhecida", "unknown origin").to_string(), |ip| tr!("de {ip}", "from {ip}"))
 }
 
 impl fmt::Display for Alerta {
@@ -28,25 +30,47 @@ impl fmt::Display for Alerta {
         match self {
             Alerta::CodigoErrado { origem: o, erros } => write!(
                 f,
-                "⚠ código de pareamento errado ({}): {erros} erro(s) no último minuto",
-                origem(o)
+                "{}",
+                tr!(
+                    "⚠ código de pareamento errado ({}): {erros} erro(s) no último minuto",
+                    "⚠ wrong pairing code ({}): {erros} error(s) in the last minute",
+                    origem(o)
+                )
             ),
             Alerta::Bloqueado { origem: o, segundos } => write!(
                 f,
-                "⚠ pareamento BLOQUEADO por {segundos} s após erros seguidos (último {})",
-                origem(o)
+                "{}",
+                tr!(
+                    "⚠ pareamento BLOQUEADO por {segundos} s após erros seguidos (último {})",
+                    "⚠ pairing BLOCKED for {segundos} s after repeated errors (last {})",
+                    origem(o)
+                )
             ),
             Alerta::PareamentoFechado { origem: o } => write!(
                 f,
-                "⚠ tentativa de pareamento ({}), mas o pareamento está fechado; pressione Enter para abrir",
-                origem(o)
+                "{}",
+                tr!(
+                    "⚠ tentativa de pareamento ({}), mas o pareamento está fechado; pressione Enter para abrir",
+                    "⚠ pairing attempt ({}), but pairing is closed; press Enter to open it",
+                    origem(o)
+                )
             ),
             Alerta::Pareado { nome, id, origem: o } => {
-                write!(f, "✓ dispositivo pareado: '{nome}' (id {id}, {})", origem(o))
+                write!(
+                    f,
+                    "{}",
+                    tr!("✓ dispositivo pareado: '{nome}' (id {id}, {})", "✓ device paired: '{nome}' (id {id}, {})", origem(o))
+                )
             }
-            Alerta::PareamentoNegado { origem: o } => write!(f, "pedido de pareamento negado ({})", origem(o)),
+            Alerta::PareamentoNegado { origem: o } => {
+                write!(f, "{}", tr!("pedido de pareamento negado ({})", "pairing request denied ({})", origem(o)))
+            }
             Alerta::PareamentoExpirou { origem: o } => {
-                write!(f, "pedido de pareamento expirou sem resposta ({})", origem(o))
+                write!(
+                    f,
+                    "{}",
+                    tr!("pedido de pareamento expirou sem resposta ({})", "pairing request expired without an answer ({})", origem(o))
+                )
             }
         }
     }
@@ -113,5 +137,61 @@ mod testes {
     #[test]
     fn o_destino_padrao_ignora_tudo_sem_quebrar() {
         ignorar()(Alerta::PareamentoFechado { origem: None });
+    }
+}
+
+#[cfg(test)]
+mod ingles {
+    use super::*;
+    use crate::{idiomas::Idioma, mensagens::com_idioma};
+
+    fn ip() -> Option<IpAddr> {
+        Some("192.168.68.50".parse().unwrap())
+    }
+
+    fn en(a: Alerta) -> String {
+        com_idioma(Idioma::En, || a.to_string())
+    }
+
+    #[test]
+    fn cada_alerta_em_ingles() {
+        assert_eq!(
+            en(Alerta::CodigoErrado { origem: ip(), erros: 3 }),
+            "⚠ wrong pairing code (from 192.168.68.50): 3 error(s) in the last minute"
+        );
+        assert_eq!(
+            en(Alerta::Bloqueado { origem: ip(), segundos: 60 }),
+            "⚠ pairing BLOCKED for 60 s after repeated errors (last from 192.168.68.50)"
+        );
+        assert_eq!(
+            en(Alerta::PareamentoFechado { origem: ip() }),
+            "⚠ pairing attempt (from 192.168.68.50), but pairing is closed; press Enter to open it"
+        );
+        assert_eq!(
+            en(Alerta::Pareado { nome: "iPhone".into(), id: "abcd1234".into(), origem: ip() }),
+            "✓ device paired: 'iPhone' (id abcd1234, from 192.168.68.50)"
+        );
+        assert_eq!(en(Alerta::PareamentoNegado { origem: ip() }), "pairing request denied (from 192.168.68.50)");
+        assert_eq!(
+            en(Alerta::PareamentoExpirou { origem: ip() }),
+            "pairing request expired without an answer (from 192.168.68.50)"
+        );
+    }
+
+    #[test]
+    fn origem_desconhecida_em_ingles() {
+        assert_eq!(en(Alerta::PareamentoNegado { origem: None }), "pairing request denied (unknown origin)");
+    }
+
+    #[test]
+    fn em_portugues_nada_mudou() {
+        assert_eq!(
+            Alerta::PareamentoNegado { origem: ip() }.to_string(),
+            "pedido de pareamento negado (de 192.168.68.50)"
+        );
+        assert_eq!(
+            Alerta::CodigoErrado { origem: None, erros: 1 }.to_string(),
+            "⚠ código de pareamento errado (origem desconhecida): 1 erro(s) no último minuto"
+        );
     }
 }

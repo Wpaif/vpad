@@ -2,6 +2,8 @@
 //! e tipo de gatilho). Os valores seguem os drivers do kernel (xpad, hid-playstation,
 //! hid-nintendo); os botões de face são por posição e iguais em todos os perfis.
 
+use crate::{mensagens::txt, tr};
+
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Faixa {
     pub min: i32,
@@ -109,7 +111,10 @@ pub const PORTA_HTTPS_PADRAO: u16 = 8443;
 fn ler_porta(texto: &str) -> Result<u16, String> {
     match texto.parse::<u16>() {
         Ok(p) if p > 0 => Ok(p),
-        _ => Err(format!("porta inválida: {texto:?} (use um número de 1 a 65535)")),
+        _ => Err(tr!(
+            "porta inválida: {texto:?} (use um número de 1 a 65535)",
+            "invalid port: {texto:?} (use a number from 1 to 65535)"
+        )),
     }
 }
 
@@ -156,41 +161,48 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
     let mut parear_ao_iniciar = false;
     let definir_acao = |nova: Acao, atual: &mut Acao| -> Result<(), String> {
         if *atual != Acao::Servir {
-            return Err(format!("use só uma ação por vez\n{}", uso()));
+            return Err(tr!("use só uma ação por vez\n{}", "use only one action at a time\n{}", uso()));
         }
         *atual = nova;
         Ok(())
     };
     let alvo = |valor: &str| -> Result<Acao, String> {
         match valor {
-            "" => Err("--revogar precisa de um id (ou 'todos')".to_string()),
-            "todos" => Ok(Acao::Revogar(Alvo::Todos)),
+            "" => Err(revogar_sem_id().to_string()),
+            // `all` além de `todos`: quem usa o terminal em inglês não precisa saber a palavra em português
+            outro if outro.eq_ignore_ascii_case("todos") || outro.eq_ignore_ascii_case("all") => {
+                Ok(Acao::Revogar(Alvo::Todos))
+            }
             id => Ok(Acao::Revogar(Alvo::Id(id.to_string()))),
         }
     };
     let teclado = |valor: &str, permitir: bool| -> Result<Acao, String> {
         if valor.is_empty() {
-            return Err("informe o id do aparelho (veja os ids com: vpad --dispositivos)".to_string());
+            return Err(txt(
+                "informe o id do aparelho (veja os ids com: vpad --dispositivos)",
+                "give the device id (see the ids with: vpad --dispositivos)",
+            )
+            .to_string());
         }
         Ok(Acao::Teclado { id: valor.to_string(), permitir })
     };
     while let Some(arg) = args.next() {
         if arg == "--perfil" {
-            id = args.next().ok_or("--perfil precisa de um valor")?;
+            id = args.next().ok_or(txt("--perfil precisa de um valor", "--perfil needs a value"))?;
         } else if let Some(valor) = arg.strip_prefix("--perfil=") {
             id = valor.to_string();
         } else if arg == "--parear" {
             parear_ao_iniciar = true;
         } else if arg == "--porta-https" {
-            porta_https = ler_porta(&args.next().ok_or("--porta-https precisa de um número")?)?;
+            porta_https = ler_porta(&args.next().ok_or(txt("--porta-https precisa de um número", "--porta-https needs a number"))?)?;
         } else if let Some(valor) = arg.strip_prefix("--porta-https=") {
             porta_https = ler_porta(valor)?;
         } else if arg == "--porta" {
-            porta = ler_porta(&args.next().ok_or("--porta precisa de um número")?)?;
+            porta = ler_porta(&args.next().ok_or(txt("--porta precisa de um número", "--porta needs a number"))?)?;
         } else if let Some(valor) = arg.strip_prefix("--porta=") {
             porta = ler_porta(valor)?;
         } else if arg == "--permitir-teclado" || arg == "--negar-teclado" {
-            let valor = args.next().ok_or_else(|| format!("{arg} precisa do id do aparelho"))?;
+            let valor = args.next().ok_or_else(|| tr!("{arg} precisa do id do aparelho", "{arg} needs the device id"))?;
             definir_acao(teclado(&valor, arg == "--permitir-teclado")?, &mut acao)?;
         } else if let Some(valor) = arg.strip_prefix("--permitir-teclado=") {
             definir_acao(teclado(valor, true)?, &mut acao)?;
@@ -199,17 +211,20 @@ pub fn opcoes_dos_argumentos(mut args: impl Iterator<Item = String>) -> Result<O
         } else if arg == "--dispositivos" {
             definir_acao(Acao::ListarDispositivos, &mut acao)?;
         } else if arg == "--revogar" {
-            let valor = args.next().ok_or("--revogar precisa de um id (ou 'todos')")?;
+            let valor = args.next().ok_or(revogar_sem_id())?;
             definir_acao(alvo(&valor)?, &mut acao)?;
         } else if let Some(valor) = arg.strip_prefix("--revogar=") {
             definir_acao(alvo(valor)?, &mut acao)?;
         } else {
-            return Err(format!("argumento desconhecido: {arg}\n{}", uso()));
+            return Err(tr!("argumento desconhecido: {arg}\n{}", "unknown argument: {arg}\n{}", uso()));
         }
     }
-    let perfil = Perfil::por_id(&id).ok_or_else(|| format!("perfil desconhecido: {id}\n{}", uso()))?;
+    let perfil = Perfil::por_id(&id).ok_or_else(|| tr!("perfil desconhecido: {id}\n{}", "unknown profile: {id}\n{}", uso()))?;
     if porta == porta_https {
-        return Err(format!("as portas HTTP e HTTPS precisam ser diferentes (as duas estão em {porta})"));
+        return Err(tr!(
+            "as portas HTTP e HTTPS precisam ser diferentes (as duas estão em {porta})",
+            "the HTTP and HTTPS ports must be different (both are {porta})"
+        ));
     }
     Ok(Opcoes { perfil, acao, porta, porta_https, parear_ao_iniciar })
 }
@@ -219,11 +234,15 @@ pub fn indice_do_perfil(id: &str) -> Option<u8> {
     PERFIS.iter().position(|p| p.id == id).map(|i| i as u8)
 }
 
+fn revogar_sem_id() -> &'static str {
+    txt("--revogar precisa de um id (ou 'todos')", "--revogar needs an id (or 'todos' / 'all')")
+}
+
 fn uso() -> String {
-    let ids: Vec<_> = PERFIS.iter().map(|p| p.id).collect();
-    format!(
-        "uso: vpad [--perfil <{}>] [--porta <1-65535>] [--porta-https <1-65535>] [--parear]\n     vpad --dispositivos\n     vpad --revogar <id|todos>\n     vpad --permitir-teclado <id> | --negar-teclado <id>",
-        ids.join("|")
+    let ids = PERFIS.iter().map(|p| p.id).collect::<Vec<_>>().join("|");
+    tr!(
+        "uso: vpad [--perfil <{ids}>] [--porta <1-65535>] [--porta-https <1-65535>] [--parear]\n     vpad --dispositivos\n     vpad --revogar <id|todos>\n     vpad --permitir-teclado <id> | --negar-teclado <id>",
+        "usage: vpad [--perfil <{ids}>] [--porta <1-65535>] [--porta-https <1-65535>] [--parear]\n     vpad --dispositivos\n     vpad --revogar <id|todos>\n     vpad --permitir-teclado <id> | --negar-teclado <id>"
     )
 }
 
@@ -499,5 +518,72 @@ mod testes {
     fn a_mensagem_de_uso_cita_parear() {
         let erro = opcoes_dos_argumentos(args(&["--foo"])).unwrap_err();
         assert!(erro.contains("--parear"), "{erro}");
+    }
+}
+
+#[cfg(test)]
+mod ingles {
+    use super::*;
+    use crate::{idiomas::Idioma, mensagens::com_idioma};
+
+    fn erro(args: &[&str]) -> String {
+        com_idioma(Idioma::En, || {
+            opcoes_dos_argumentos(args.iter().map(|a| a.to_string())).unwrap_err()
+        })
+    }
+
+    #[test]
+    fn erros_de_argumentos_em_ingles() {
+        assert_eq!(erro(&["--porta", "0"]), "invalid port: \"0\" (use a number from 1 to 65535)");
+        assert_eq!(erro(&["--perfil"]), "--perfil needs a value");
+        assert_eq!(erro(&["--porta"]), "--porta needs a number");
+        assert_eq!(erro(&["--porta-https"]), "--porta-https needs a number");
+        assert_eq!(erro(&["--revogar"]), "--revogar needs an id (or 'todos' / 'all')");
+        assert_eq!(erro(&["--revogar="]), "--revogar needs an id (or 'todos' / 'all')");
+        assert_eq!(erro(&["--permitir-teclado"]), "--permitir-teclado needs the device id");
+        assert_eq!(
+            erro(&["--permitir-teclado="]),
+            "give the device id (see the ids with: vpad --dispositivos)"
+        );
+        assert_eq!(
+            erro(&["--porta", "9000", "--porta-https", "9000"]),
+            "the HTTP and HTTPS ports must be different (both are 9000)"
+        );
+    }
+
+    #[test]
+    fn erros_que_mostram_o_uso_trazem_o_uso_em_ingles() {
+        for args in [&["--nada"][..], &["--perfil", "x"][..], &["--dispositivos", "--revogar", "todos"][..]] {
+            let e = erro(args);
+            assert!(e.contains("usage: vpad [--perfil <xbox360|ds4|switch-pro|teclado>]"), "{args:?}: {e}");
+            assert!(e.contains("vpad --revogar <id|todos>"), "{e}");
+        }
+        assert!(erro(&["--nada"]).starts_with("unknown argument: --nada\n"));
+        assert!(erro(&["--perfil", "x"]).starts_with("unknown profile: x\n"));
+        assert!(erro(&["--dispositivos", "--revogar", "todos"]).starts_with("use only one action at a time\n"));
+    }
+
+    #[test]
+    fn em_portugues_os_erros_continuam_iguais() {
+        let e = opcoes_dos_argumentos(["--nada".to_string()].into_iter()).unwrap_err();
+        assert!(e.starts_with("argumento desconhecido: --nada\nuso: vpad"), "{e}");
+        assert_eq!(
+            opcoes_dos_argumentos(["--porta".to_string(), "0".to_string()].into_iter()).unwrap_err(),
+            "porta inválida: \"0\" (use um número de 1 a 65535)"
+        );
+    }
+
+    #[test]
+    fn revogar_aceita_all_alem_de_todos_em_qualquer_idioma() {
+        for idioma in [Idioma::PtBr, Idioma::En] {
+            for palavra in ["todos", "all", "ALL"] {
+                let o = com_idioma(idioma, || {
+                    opcoes_dos_argumentos(["--revogar".to_string(), palavra.to_string()].into_iter()).unwrap()
+                });
+                assert_eq!(o.acao, Acao::Revogar(Alvo::Todos), "{idioma:?} {palavra}");
+            }
+        }
+        let um = opcoes_dos_argumentos(["--revogar".to_string(), "abcd1234".to_string()].into_iter()).unwrap();
+        assert_eq!(um.acao, Acao::Revogar(Alvo::Id("abcd1234".into())));
     }
 }

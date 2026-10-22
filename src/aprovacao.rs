@@ -9,6 +9,7 @@ use std::{
 };
 
 use tokio::sync::{oneshot, watch};
+use crate::{mensagens::txt, tr};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tipo {
@@ -28,12 +29,13 @@ pub struct Pedido {
 impl Pedido {
     /// O texto do pedido para o terminal.
     pub fn descricao(&self) -> String {
-        let de = self.origem.map_or_else(|| "origem desconhecida".to_string(), |ip| ip.to_string());
+        let de = self.origem.map_or_else(|| txt("origem desconhecida", "unknown origin").to_string(), |ip| ip.to_string());
         match &self.tipo {
-            Tipo::Pareamento { nome } => format!("parear o aparelho '{nome}' ({de})"),
-            Tipo::AtivarTeclado { nome } => {
-                format!("ativar o MODO TECLADO do aparelho '{nome}' ({de}): ele passará a digitar no PC")
-            }
+            Tipo::Pareamento { nome } => tr!("parear o aparelho '{nome}' ({de})", "pair the device '{nome}' ({de})"),
+            Tipo::AtivarTeclado { nome } => tr!(
+                "ativar o MODO TECLADO do aparelho '{nome}' ({de}): ele passará a digitar no PC",
+                "enable KEYBOARD MODE on the device '{nome}' ({de}): it will type on the PC"
+            ),
         }
     }
 }
@@ -294,5 +296,31 @@ mod testes {
         tarefa.await.unwrap().unwrap();
         observador.changed().await.unwrap();
         assert!(observador.borrow_and_update().is_none());
+    }
+}
+
+#[cfg(test)]
+mod ingles {
+    use super::*;
+    use crate::{idiomas::Idioma, mensagens::com_idioma};
+
+    fn pedido(tipo: Tipo, origem: Option<&str>) -> Pedido {
+        Pedido { id: 1, tipo, origem: origem.map(|o| o.parse().unwrap()) }
+    }
+
+    #[test]
+    fn descricao_dos_pedidos_em_ingles() {
+        com_idioma(Idioma::En, || {
+            let p = pedido(Tipo::Pareamento { nome: "iPhone".into() }, Some("192.168.68.50"));
+            assert_eq!(p.descricao(), "pair the device 'iPhone' (192.168.68.50)");
+            let t = pedido(Tipo::AtivarTeclado { nome: "iPhone".into() }, None);
+            assert_eq!(t.descricao(), "enable KEYBOARD MODE on the device 'iPhone' (unknown origin): it will type on the PC");
+        });
+    }
+
+    #[test]
+    fn descricao_em_portugues_continua_igual() {
+        let p = pedido(Tipo::Pareamento { nome: "iPhone".into() }, None);
+        assert_eq!(p.descricao(), "parear o aparelho 'iPhone' (origem desconhecida)");
     }
 }

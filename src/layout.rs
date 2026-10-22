@@ -6,6 +6,7 @@
 //! quem pode escrever é um aparelho pareado, e o arquivo nunca deve virar um depósito de
 //! dados arbitrários.
 
+use crate::tr;
 use std::{
     fs, io,
     path::{Path, PathBuf},
@@ -103,7 +104,7 @@ impl ArmazemLayout {
         let atual = match ler(&arquivo) {
             Ok(layout) => layout,
             Err(e) => {
-                eprintln!("ignorando {}: {e}", arquivo.display());
+                eprintln!("{}", tr!("ignorando {}: {e}", "ignoring {}: {e}", arquivo.display()));
                 None
             }
         };
