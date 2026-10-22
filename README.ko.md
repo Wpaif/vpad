@@ -58,6 +58,19 @@ PC를 재시작한 뒤에도 권한이 유지되게 하려면 ACL 권한(또는 
 
 ## 설치
 
+### 미리 빌드된 바이너리(Linux x86_64)
+
+사용만 할 거라면 [최신 릴리스](https://github.com/Wpaif/vpad/releases/latest)에서 패키지(`vpad-X.Y.Z-linux-x86_64.tar.gz`, 옆에 `.sha256`이 있습니다)를 내려받아 체크섬을 확인하고 압축을 풉니다. Rust나 Node는 필요 없지만 [요구 사항](#요구-사항)의 `uinput` 설정은 여전히 필요합니다. 그다음 [처음 사용하기](#처음-사용하기)로 넘어가세요.
+
+```sh
+sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256
+tar xzf vpad-X.Y.Z-linux-x86_64.tar.gz
+cd vpad-X.Y.Z-linux-x86_64
+./vpad
+```
+
+### 소스에서 빌드
+
 프로젝트를 내려받고 폴더로 이동합니다:
 
 ```sh

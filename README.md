@@ -62,6 +62,19 @@ que sobreviva a reiniciar o PC.
 
 ## Instalação
 
+### Binário pronto (Linux x86_64)
+
+Se você só quer usar, baixe o pacote da [última versão](https://github.com/Wpaif/vpad/releases/latest) (`vpad-X.Y.Z-linux-x86_64.tar.gz`, com o `.sha256` ao lado), confira a soma e extraia. Não precisa de Rust nem de Node, mas o `uinput` dos [requisitos](#requisitos) continua necessário. Depois siga o [primeiro uso](#primeiro-uso).
+
+```sh
+sha256sum -c vpad-X.Y.Z-linux-x86_64.tar.gz.sha256
+tar xzf vpad-X.Y.Z-linux-x86_64.tar.gz
+cd vpad-X.Y.Z-linux-x86_64
+./vpad
+```
+
+### Compilar a partir do código
+
 Baixe o projeto e entre na pasta:
 
 ```sh
@@ -315,6 +328,13 @@ Na API, toda resposta de erro traz um `codigo` estável (por exemplo
 `pareamento_fechado`, `mapa_invalido`, `gravacao_falhou`) além da mensagem em português, e a página
 traduz pelo código. Os rótulos de tecla (`Espaço`, `Apagar`) e os nomes dos grupos de teclas
 também são traduzidos na página (`web/src/keyNames.ts`).
+
+Os **releases** levam o binário para Linux x86_64 (`vpad-X.Y.Z-linux-x86_64.tar.gz` e o `.sha256`): ao
+criar uma tag `vX.Y.Z`, o workflow `.github/workflows/release.yml` constrói a página, compila com
+`--locked`, confere que o binário abre, empacota (`scripts/empacotar-release.sh`) e publica, criando o
+release com as notas do changelog (`scripts/notas-do-release.sh`). Para anexar o pacote a um release que
+já existe, use Actions → Release → Run workflow, com `tag` (e, se a tag for anterior aos scripts, `fonte`
+com a branch ou o commit a compilar). Sem `tag`, o workflow só gera o pacote como artefato, para testar.
 
 O histórico de versões fica em [CHANGELOG.md](CHANGELOG.md) (formato *Keep a Changelog*, versionamento
 semântico). Ao preparar um release, a versão precisa ser a mesma no `Cargo.toml`, no `Cargo.lock`, no

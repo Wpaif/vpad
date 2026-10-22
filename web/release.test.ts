@@ -79,4 +79,12 @@ describe("CHANGELOG", () => {
   it("o README em português aponta para o changelog", () => {
     expect(raiz("README.md")).toContain("[CHANGELOG.md](CHANGELOG.md)");
   });
+
+  it("o changelog registra o binário pré-compilado em 'Não lançado' e não diz mais que ele não existe", () => {
+    const c = raiz("CHANGELOG.md");
+    const naoLancado = c.slice(c.indexOf("## [Não lançado]"), c.indexOf("## [0.1.0]"));
+    expect(naoLancado).toMatch(/^### Adicionado$/m);
+    expect(naoLancado).toMatch(/linux-x86_64/);
+    expect(c).not.toMatch(/Não há binário pré-compilado/);
+  });
 });
