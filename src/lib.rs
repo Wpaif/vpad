@@ -50,6 +50,7 @@ use aprovacao::{Decisao, Ocupado, Pedido, Tipo as Tipo_};
 use dispositivos::Dispositivos;
 use pareamento::Pareamento;
 use armazem::ArmazemMapa;
+use layout::ArmazemLayout;
 use perfil::{PERFIS, Tipo};
 use protocolo::{AvisoDePerfil, Evento, Recusa, codificar_aviso_de_perfil, codificar_perfil, codificar_recusa, decodificar};
 
@@ -147,6 +148,14 @@ async fn exigir_token_do_teclado(State(estado): State<Estado>, pedido: Request<B
     }
 }
 
+/// Autentica (qualquer aparelho pareado) antes de o corpo ser lido, como a do teclado.
+async fn exigir_token_do_aparelho(State(estado): State<Estado>, pedido: Request<Body>, seguinte: Next) -> Response {
+    match crate::api::exigir_pareado(&estado, pedido.headers()) {
+        Ok(()) => seguinte.run(pedido).await,
+        Err(resposta) => resposta,
+    }
+}
+
 /// Cabeçalhos de segurança em toda resposta do HTTPS.
 async fn cabecalhos_de_seguranca(mut resposta: Response) -> Response {
     let cabecalhos = resposta.headers_mut();
@@ -178,6 +187,7 @@ struct Estado {
     /// Índice do perfil ativo, publicado pelo serviço dono do controle virtual.
     perfil: watch::Receiver<u8>,
     mapa: Arc<ArmazemMapa>,
+    layout: Arc<ArmazemLayout>,
     acesso: Arc<Acesso>,
 }
 
@@ -379,7 +389,21 @@ pub fn app_com(
     mapa: Arc<ArmazemMapa>,
     acesso: Arc<Acesso>,
 ) -> Router {
-    let estado = Estado { saida, perfil, mapa, acesso };
+    app_completo(saida, perfil, mapa, Arc::new(ArmazemLayout::em_memoria()), acesso)
+}
+
+/// Como `app_com`, mais o armazenamento do layout dos botões (um só, para todos os aparelhos).
+pub fn app_completo(
+    saida: Saida,
+    perfil: watch::Receiver<u8>,
+    mapa: Arc<ArmazemMapa>,
+    layout: Arc<ArmazemLayout>,
+    acesso: Arc<Acesso>,
+) -> Router {
+    let estado = Estado { saida, perfil, mapa, layout, acesso };
+    let layout_rotas = get(api::obter_layout)
+        .put(api::definir_layout)
+        .route_layer(middleware::from_fn_with_state(estado.clone(), exigir_token_do_aparelho));
     let teclado = get(api::obter)
         .put(api::definir)
         .route_layer(middleware::from_fn_with_state(estado.clone(), exigir_token_do_teclado));
@@ -387,6 +411,7 @@ pub fn app_com(
         .route("/ws", get(rota_ws))
         .route("/api/parear", post(api::parear))
         .route("/api/teclado", teclado)
+        .route("/api/layout", layout_rotas)
         .fallback(get(estatico))
         .with_state(estado.clone())
         .layer(middleware::from_fn_with_state(estado, porteiro))
