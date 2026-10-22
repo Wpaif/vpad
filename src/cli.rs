@@ -1,7 +1,11 @@
 //! Texto que o programa mostra no terminal: o código de pareamento com a contagem
 //! regressiva e a lista de aparelhos pareados.
 
-use crate::dispositivos::Registro;
+use crate::{
+    dispositivos::Registro,
+    mensagens::{em_portugues, txt},
+    tr,
+};
 
 /// "123456" -> "123 456", mais fácil de ler e de digitar.
 pub fn codigo_agrupado(codigo: &str) -> String {
@@ -13,8 +17,9 @@ pub fn codigo_agrupado(codigo: &str) -> String {
 
 /// A linha que se reescreve a cada segundo: limpa a linha e volta ao começo dela.
 pub fn linha_do_codigo(codigo: &str, segundos_restantes: u64) -> String {
-    format!(
+    tr!(
         "\r\x1b[2Kcódigo de pareamento: \x1b[1m{}\x1b[0m   (muda em {segundos_restantes} s)",
+        "\r\x1b[2Kpairing code: \x1b[1m{}\x1b[0m   (changes in {segundos_restantes} s)",
         codigo_agrupado(codigo)
     )
 }
@@ -39,18 +44,29 @@ pub fn data_utc(segundos: u64) -> String {
 
 pub fn tabela_de_dispositivos(lista: &[Registro]) -> String {
     if lista.is_empty() {
-        return "Nenhum dispositivo pareado.\nPara parear, abra a página no celular e digite o código de 6 dígitos \
-                que o servidor mostra no terminal."
-            .to_string();
+        return txt(
+            "Nenhum dispositivo pareado.\nPara parear, abra a página no celular e digite o código de 6 dígitos \
+             que o servidor mostra no terminal.",
+            "No devices paired.\nTo pair one, open the page on the phone and type the 6-digit code the server \
+             shows in the terminal.",
+        )
+        .to_string();
     }
     let largura = lista.iter().map(|d| d.nome.chars().count()).max().unwrap_or(0).max(4);
-    let mut linhas = vec![format!(
-        "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  TECLADO",
-        "ID", "NOME", "PAREADO EM (UTC)", "VALIDO ATE (UTC)", "VISTO POR ULTIMO (UTC)"
-    )];
+    let mut linhas = vec![if em_portugues() {
+        format!(
+            "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  TECLADO",
+            "ID", "NOME", "PAREADO EM (UTC)", "VALIDO ATE (UTC)", "VISTO POR ULTIMO (UTC)"
+        )
+    } else {
+        format!(
+            "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  KEYBOARD",
+            "ID", "NAME", "PAIRED AT (UTC)", "EXPIRES (UTC)", "LAST SEEN (UTC)"
+        )
+    }];
     for d in lista {
-        let teclado = if d.teclado { "sim" } else { "não" };
-        let visto = d.ultimo_visto.map_or_else(|| "nunca".to_string(), data_utc);
+        let teclado = if d.teclado { txt("sim", "yes") } else { txt("não", "no") };
+        let visto = d.ultimo_visto.map_or_else(|| txt("nunca", "never").to_string(), data_utc);
         linhas.push(format!(
             "{:<8}  {:<largura$}  {:<16}  {:<16}  {:<20}  {teclado}",
             d.id,
@@ -144,5 +160,71 @@ mod testes {
         assert!(cabecalho.contains("VISTO POR ULTIMO"), "{t}");
         assert!(t.contains(&data_utc(1_700_000_000 + 90 * 86_400)), "{t}");
         assert!(t.contains(&data_utc(1_700_000_500)), "{t}");
+    }
+}
+
+#[cfg(test)]
+mod ingles {
+    use super::*;
+    use crate::{idiomas::Idioma, mensagens::com_idioma};
+
+    fn registro(teclado: bool, ultimo_visto: Option<u64>) -> Registro {
+        Registro {
+            id: "abcd1234".into(),
+            nome: "iPhone".into(),
+            criado: 1_700_000_000,
+            teclado,
+            expira: 1_707_776_000,
+            ultimo_visto,
+        }
+    }
+
+    #[test]
+    fn a_linha_do_codigo_em_ingles() {
+        let linha = com_idioma(Idioma::En, || linha_do_codigo("123456", 17));
+        assert_eq!(linha, "\r\x1b[2Kpairing code: \x1b[1m123 456\x1b[0m   (changes in 17 s)");
+    }
+
+    #[test]
+    fn a_tabela_vazia_em_ingles() {
+        let t = com_idioma(Idioma::En, || tabela_de_dispositivos(&[]));
+        assert_eq!(
+            t,
+            "No devices paired.\nTo pair one, open the page on the phone and type the 6-digit code the server shows in the terminal."
+        );
+    }
+
+    #[test]
+    fn a_tabela_em_ingles_traduz_o_cabecalho_e_os_valores() {
+        let t = com_idioma(Idioma::En, || {
+            tabela_de_dispositivos(&[registro(true, None), registro(false, Some(1_700_000_100))])
+        });
+        let linhas: Vec<_> = t.lines().collect();
+        assert!(linhas[0].starts_with("ID "), "{t}");
+        for palavra in ["NAME", "PAIRED AT (UTC)", "EXPIRES (UTC)", "LAST SEEN (UTC)", "KEYBOARD"] {
+            assert!(linhas[0].contains(palavra), "{palavra}: {t}");
+        }
+        assert!(linhas[1].contains("never") && linhas[1].trim_end().ends_with("yes"), "{t}");
+        assert!(linhas[2].contains("2023-11-14") && linhas[2].trim_end().ends_with("no"), "{t}");
+        assert!(!t.contains("NOME") && !t.contains("nunca") && !t.contains("sim"), "{t}");
+    }
+
+    #[test]
+    fn as_colunas_continuam_alinhadas_em_ingles() {
+        let t = com_idioma(Idioma::En, || tabela_de_dispositivos(&[registro(true, Some(1_700_000_100))]));
+        let linhas: Vec<_> = t.lines().collect();
+        let coluna = |l: &str, trecho: &str| l.find(trecho).unwrap();
+        // o início de cada coluna do cabeçalho cai no mesmo ponto que o dado da linha
+        assert_eq!(coluna(linhas[0], "NAME"), coluna(linhas[1], "iPhone"));
+        assert_eq!(coluna(linhas[0], "PAIRED AT"), coluna(linhas[1], "2023-11-14"));
+        assert_eq!(coluna(linhas[0], "EXPIRES"), coluna(linhas[1], "2024-02-12"));
+        assert_eq!(coluna(linhas[0], "LAST SEEN"), coluna(linhas[1], "2023-11-14 22:15"));
+    }
+
+    #[test]
+    fn em_portugues_a_tabela_continua_igual() {
+        let t = tabela_de_dispositivos(&[registro(false, None)]);
+        assert!(t.lines().next().unwrap().contains("PAREADO EM (UTC)"));
+        assert!(t.contains("nunca") && t.contains("não"));
     }
 }
