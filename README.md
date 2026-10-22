@@ -82,7 +82,8 @@ O binário sai em `target/release/vpad`. Se você mudar qualquer coisa em `web/`
 2. **Instale o certificado no iPhone** (uma vez só). Na primeira execução o servidor cria uma
    autoridade de certificação própria e abre por 5 minutos uma página de configuração em
    HTTP (`http://IP-DO-PC:8080`). Para abri-la de novo mais tarde, digite `c` no terminal.
-   No iPhone:
+   No iPhone (a página abre no idioma do aparelho e tem links para trocar de idioma no topo; os
+   nomes dos menus do iOS abaixo são os da versão em português):
 
    1. Abra a página de configuração e toque em **Baixar o perfil** → **Permitir**.
    2. Em **Ajustes → Perfil baixado**, toque no certificado e em **Mais detalhes**, e confira se
@@ -284,7 +285,13 @@ seis arquivos. Use `t("chave")` no código, sempre na hora do uso (nunca em cons
 porque o idioma é escolhido só depois do carregamento) e `data-i18n` no HTML. O teste
 `i18nTextos.test.ts` falha se sobrar texto em português fixo no código.
 
-O servidor não traduz nada: toda resposta de erro da API traz um `codigo` estável (por exemplo
+A página de configuração do certificado (a que o iPhone abre em `http://IP-DO-PC:8080`) e o perfil
+`.mobileconfig` também existem nos seis idiomas: o servidor escolhe pelo `?lang=` da URL ou pelo
+`Accept-Language` do navegador (sem tradução, inglês; sem informação, português). Os textos estão em
+`src/idiomas.rs`, com testes que exigem todos os campos preenchidos nos seis idiomas. O terminal do PC
+continua em português.
+
+Na API, toda resposta de erro traz um `codigo` estável (por exemplo
 `pareamento_fechado`, `mapa_invalido`, `gravacao_falhou`) além da mensagem em português, e a página
 traduz pelo código. Os rótulos de tecla (`Espaço`, `Apagar`) e os nomes dos grupos de teclas
 também são traduzidos na página (`web/src/keyNames.ts`).
