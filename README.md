@@ -316,6 +316,11 @@ Na API, toda resposta de erro traz um `codigo` estável (por exemplo
 traduz pelo código. Os rótulos de tecla (`Espaço`, `Apagar`) e os nomes dos grupos de teclas
 também são traduzidos na página (`web/src/keyNames.ts`).
 
+O histórico de versões fica em [CHANGELOG.md](CHANGELOG.md) (formato *Keep a Changelog*, versionamento
+semântico). Ao preparar um release, a versão precisa ser a mesma no `Cargo.toml`, no `Cargo.lock`, no
+`web/package.json` e no `web/package-lock.json`, e a seção dela no changelog precisa existir: o teste
+`web/release.test.ts` confere tudo isso.
+
 O **README** tem traduções para os outros cinco idiomas (`README.en.md`, `README.es.md`,
 `README.zh-CN.md`, `README.ja.md` e `README.ko.md`), ligadas pela barra de idiomas do topo. Elas cobrem
 tudo que o usuário lê (do começo até os problemas comuns e a licença) e trazem só um resumo da parte de
