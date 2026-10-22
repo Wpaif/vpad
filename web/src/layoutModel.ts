@@ -45,6 +45,8 @@ export function controlsOf(group: GroupId): ControlId[] {
 
 export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 2;
+/** Opacidade dos botões: nunca some de vez (20% ainda se enxerga e se acerta). */
+export const MIN_OPACITY = 0.2;
 /** O deslocamento é limitado a uma tela inteira para cada lado. */
 export const MAX_OFFSET = 1;
 
@@ -68,6 +70,8 @@ export interface Layout {
   hidden: ControlId[];
   /** só existe quando algum controle foi movido individualmente */
   controls?: Partial<Record<ControlId, ControlAdjust>>;
+  /** opacidade de todos os botões (MIN_OPACITY a 1); só existe quando é menor que 1 */
+  opacity?: number;
 }
 
 const NEUTRAL: GroupAdjust = { dx: 0, dy: 0, scale: 1 };
@@ -120,12 +124,16 @@ export function normalizeLayout(layout: Layout): Layout {
   }
   const result: Layout = { version: LAYOUT_VERSION, groups, hidden };
   if (Object.keys(controls).length > 0) result.controls = controls;
+  if (typeof layout.opacity === "number" && Number.isFinite(layout.opacity)) {
+    const opacity = round(clamp(layout.opacity, MIN_OPACITY, 1), 2);
+    if (opacity < 1) result.opacity = opacity;
+  }
   return result;
 }
 
 export function isDefault(layout: Layout): boolean {
   const l = normalizeLayout(layout);
-  return Object.keys(l.groups).length === 0 && l.hidden.length === 0 && l.controls === undefined;
+  return Object.keys(l.groups).length === 0 && l.hidden.length === 0 && l.controls === undefined && l.opacity === undefined;
 }
 
 export function adjustOf(layout: Layout, group: GroupId): GroupAdjust {
@@ -146,6 +154,15 @@ export function resetGroup(layout: Layout, group: GroupId): Layout {
   const controls = { ...layout.controls };
   for (const c of controlsOf(group)) delete controls[c];
   return normalizeLayout({ ...layout, groups, controls });
+}
+
+export function opacityOf(layout: Layout): number {
+  return layout.opacity ?? 1;
+}
+
+/** Muda a opacidade de todos os botões (100% é o padrão e apaga o campo). Devolve um layout novo. */
+export function withOpacity(layout: Layout, opacity: number): Layout {
+  return normalizeLayout({ ...layout, opacity });
 }
 
 export function controlOffset(layout: Layout, control: ControlId): ControlAdjust {
@@ -210,7 +227,8 @@ export function parseLayout(raw: unknown): ParseResult {
     if ([entry.dx, entry.dy].some((v) => v !== undefined && typeof v !== "number")) continue;
     controls[id] = { dx: entry.dx as number, dy: entry.dy as number };
   }
-  return { layout: normalizeLayout({ version: LAYOUT_VERSION, groups, hidden, controls }), status: "ok" };
+  const opacity = typeof raw.opacity === "number" ? raw.opacity : undefined;
+  return { layout: normalizeLayout({ version: LAYOUT_VERSION, groups, hidden, controls, opacity }), status: "ok" };
 }
 
 export function serializeLayout(layout: Layout): string {

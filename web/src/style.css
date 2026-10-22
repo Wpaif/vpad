@@ -540,3 +540,11 @@ body:has(#pair:not([hidden])) .rotate { display: none; }
 /* grupo destravado: o contorno do grupo fica pontilhado e cada botão passa a ser arrastável */
 #pad[data-editando] [data-solto] { outline-style: dotted; }
 #pad[data-editando] [data-solto] button { pointer-events: auto; outline: 1.5px dashed var(--accent); outline-offset: 2px; cursor: grab; }
+
+/* opacidade dos botões (ajuste do layout); apertar um botão o mostra por inteiro */
+#pad [data-btn], #pad [data-trigger], #pad .stick { opacity: var(--opacidade, 1); }
+#pad [data-pressed] { opacity: 1; }
+.layout-opacity { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.layout-opacity input { width: 84px; accent-color: var(--accent); }
+.layout-opacity output { min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .layout-opacity-label { display: none; } }

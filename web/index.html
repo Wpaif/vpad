@@ -57,6 +57,11 @@
   <div id="layout-dock" class="layout-dock">
     <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" hidden>
       <span class="layout-hint">Arraste os grupos</span>
+    <label class="layout-opacity">
+      <span class="layout-opacity-label">Opacidade</span>
+      <input id="layout-opacity" type="range" min="20" max="100" step="5" value="100" aria-label="Opacidade dos botões">
+      <output id="layout-opacity-value">100%</output>
+    </label>
       <span data-note class="layout-note" role="status"></span>
       <button type="button" data-act="buttons">Botões</button>
       <button type="button" data-act="reset">Restaurar</button>
