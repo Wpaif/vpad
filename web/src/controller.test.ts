@@ -108,3 +108,15 @@ describe("controle oculto", () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("modo edição do layout", () => {
+  it("com data-editando no pad, botão, gatilho e analógico não enviam nada", () => {
+    document.getElementById("root")!.setAttribute("data-editando", "");
+    for (const [i, q] of ["[data-btn=A]", "[data-trigger=LT]", "[data-stick]"].entries()) {
+      const el = document.querySelector(q)!;
+      ptr(el, "pointerdown", i + 1, 100, 10);
+      ptr(el, "pointerup", i + 1, 100, 10);
+    }
+    expect(sent).toEqual([]);
+  });
+});

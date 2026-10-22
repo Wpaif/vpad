@@ -86,3 +86,19 @@ describe("painel de latência", () => {
     expect(document.getElementById("stats")!.contains(toggle)).toBe(true);
   });
 });
+
+describe("editor de layout na página", () => {
+  it("o painel tem o botão que abre o modo edição", () => {
+    const edit = document.getElementById("edit-layout");
+    expect(edit?.tagName).toBe("BUTTON");
+    expect(document.getElementById("stats")!.contains(edit)).toBe(true);
+  });
+
+  it("a barra de edição começa escondida e tem salvar, cancelar e restaurar", () => {
+    const bar = document.getElementById("layout-bar")!;
+    expect(bar.hidden).toBe(true);
+    for (const act of ["save", "cancel", "reset"]) {
+      expect(bar.querySelector(`button[data-act=${act}]`)).not.toBeNull();
+    }
+  });
+});

@@ -43,7 +43,7 @@ export function formatViewportInfo({ inner, screen, safe, standalone }: Viewport
   ].join("\n");
 }
 
-function readSafeArea(doc: Document): ViewportInfo["safe"] {
+export function readSafeArea(doc: Document): ViewportInfo["safe"] {
   const probe = doc.createElement("div");
   probe.style.cssText =
     "position:fixed;visibility:hidden;pointer-events:none;" +

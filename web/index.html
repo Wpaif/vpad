@@ -45,12 +45,20 @@
       <div><dt>jitter</dt><dd data-stat="jitter">–</dd></div>
       <div><dt>perda</dt><dd data-stat="loss">0%</dd></div>
     </dl>
+    <button id="edit-layout" class="link" type="button">Editar layout…</button>
     <button id="ping-toggle" class="link" type="button" aria-pressed="false">ping curto: desligado</button>
     <svg class="spark" viewBox="0 0 120 32" preserveAspectRatio="none" aria-hidden="true">
       <polyline data-stat="spark" points=""/>
     </svg>
   </section>
 
+  <div id="layout-bar" class="layout-bar" role="toolbar" aria-label="Editar layout" hidden>
+    <span class="layout-hint">Arraste os grupos</span>
+    <span data-note class="layout-note" role="status"></span>
+    <button type="button" data-act="reset">Restaurar</button>
+    <button type="button" data-act="cancel">Cancelar</button>
+    <button type="button" data-act="save" class="primary">Salvar</button>
+  </div>
   <div id="key-editor" class="editor" role="dialog" aria-modal="true" aria-label="Editor de teclas" hidden></div>
 
   <div id="pair" class="gate" role="dialog" aria-modal="true" aria-label="Parear este aparelho" hidden>

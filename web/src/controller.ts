@@ -17,6 +17,9 @@ export function bindController(root: HTMLElement, send: Send): void {
   root.querySelectorAll<HTMLElement>("[data-stick]").forEach((el) => bindStick(el, send));
 }
 
+/** Controle oculto pelo layout, ou pad em modo edição: o toque não vale como entrada. */
+const blocked = (el: Element) => el.classList.contains("oculto") || el.closest("[data-editando]") !== null;
+
 function capture(el: Element, id: number) {
   try {
     el.setPointerCapture?.(id);
@@ -28,7 +31,7 @@ function capture(el: Element, id: number) {
 function bindHold(el: HTMLElement, press: () => void, release: () => void) {
   const active = new Set<number>();
   el.addEventListener("pointerdown", (e) => {
-    if (el.classList.contains("oculto") || active.has(e.pointerId)) return;
+    if (blocked(el) || active.has(e.pointerId)) return;
     active.add(e.pointerId);
     capture(el, e.pointerId);
     if (active.size === 1) {
@@ -79,7 +82,7 @@ function bindStick(el: HTMLElement, send: Send) {
   };
 
   el.addEventListener("pointerdown", (e) => {
-    if (el.classList.contains("oculto") || owner !== null) return;
+    if (blocked(el) || owner !== null) return;
     owner = e.pointerId;
     capture(el, e.pointerId);
     el.setAttribute("data-pressed", "");
