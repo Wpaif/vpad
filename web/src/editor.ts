@@ -1,5 +1,6 @@
 import { CONTROLS, CONTROL_GROUPS, groupName } from "./controls";
 import { t } from "./i18n";
+import { keyGroupName, keyLabel } from "./keyNames";
 import type { KeyboardConfig, KeyInfo, KeyMap } from "./keyboard";
 
 export interface EditorDeps {
@@ -55,7 +56,10 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
     statusEl.textContent = text;
   };
   const keyName = (id: string | undefined) =>
-    id === undefined ? "–" : (config?.teclas.find((k) => k.id === id)?.rotulo ?? id);
+    id === undefined ? "–" : (() => {
+      const key = config?.teclas.find((k) => k.id === id);
+      return key ? keyLabel(key) : id;
+    })();
   const controlLabel = (id: string) => CONTROLS.find((c) => c.id === id)?.label ?? id;
 
   function renderRows() {
@@ -80,10 +84,10 @@ export function mountKeyEditor(root: HTMLElement, deps: EditorDeps): KeyEditor {
     for (const key of config?.teclas ?? []) groups.set(key.grupo, [...(groups.get(key.grupo) ?? []), key]);
     const sections = [...groups].map(([group, keys]) => {
       const section = el("section");
-      section.append(el("h4", undefined, group));
+      section.append(el("h4", undefined, keyGroupName(group)));
       const grid = el("div", "keys");
       for (const key of keys) {
-        const b = el<HTMLButtonElement>("button", undefined, key.rotulo);
+        const b = el<HTMLButtonElement>("button", undefined, keyLabel(key));
         b.type = "button";
         b.dataset.key = key.id;
         b.setAttribute("aria-label", key.id);

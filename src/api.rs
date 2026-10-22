@@ -32,9 +32,10 @@ fn token_do_cabecalho(headers: &HeaderMap) -> Option<&str> {
 pub(crate) fn exigir_teclado(estado: &Estado, headers: &HeaderMap) -> Result<(), Response> {
     let permissoes = token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t, agora()));
     match permissoes {
-        None => Err(erro(StatusCode::UNAUTHORIZED, "não autorizado")),
+        None => Err(erro(StatusCode::UNAUTHORIZED, "nao_autorizado", "não autorizado")),
         Some(p) if !p.teclado => Err(erro(
             StatusCode::FORBIDDEN,
+            "sem_permissao_teclado",
             "este aparelho não tem permissão para o modo teclado: libere no PC com vpad --permitir-teclado <id>",
         )),
         Some(_) => Ok(()),
@@ -46,7 +47,7 @@ pub(crate) fn exigir_teclado(estado: &Estado, headers: &HeaderMap) -> Result<(),
 pub(crate) fn exigir_pareado(estado: &Estado, headers: &HeaderMap) -> Result<(), Response> {
     match token_do_cabecalho(headers).and_then(|t| estado.acesso.permissoes(t, agora())) {
         Some(_) => Ok(()),
-        None => Err(erro(StatusCode::UNAUTHORIZED, "não autorizado")),
+        None => Err(erro(StatusCode::UNAUTHORIZED, "nao_autorizado", "não autorizado")),
     }
 }
 
@@ -63,8 +64,10 @@ pub(crate) struct PedidoLayout {
 pub(crate) async fn definir_layout(State(estado): State<Estado>, Json(pedido): Json<PedidoLayout>) -> Response {
     match estado.layout.definir(&pedido.layout) {
         Ok(salvo) => Json(json!({ "layout": salvo })).into_response(),
-        Err(ErroLayout::Invalido(e)) => erro(StatusCode::BAD_REQUEST, e),
-        Err(ErroLayout::Disco(e)) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
+        Err(ErroLayout::Invalido(e)) => erro(StatusCode::BAD_REQUEST, "layout_invalido", e),
+        Err(ErroLayout::Disco(e)) => {
+            erro(StatusCode::INTERNAL_SERVER_ERROR, "gravacao_falhou", format!("não consegui gravar: {e}"))
+        }
     }
 }
 
@@ -92,8 +95,10 @@ pub(crate) struct Pedido {
     mapa: BTreeMap<String, String>,
 }
 
-fn erro(status: StatusCode, mensagem: impl ToString) -> Response {
-    (status, Json(json!({ "erro": mensagem.to_string() }))).into_response()
+/// Toda resposta de erro leva um `codigo` estável (para a página traduzir no idioma do usuário)
+/// e uma `erro` em português (para o terminal, os logs e quem usa a API direto).
+fn erro(status: StatusCode, codigo: &str, mensagem: impl ToString) -> Response {
+    (status, Json(json!({ "codigo": codigo, "erro": mensagem.to_string() }))).into_response()
 }
 
 pub(crate) async fn definir(
@@ -106,12 +111,12 @@ pub(crate) async fn definir(
     }
     let mapa = match Mapa::de_json(&pedido.mapa) {
         Ok(m) => m,
-        Err(e) => return erro(StatusCode::BAD_REQUEST, e),
+        Err(e) => return erro(StatusCode::BAD_REQUEST, "mapa_invalido", e),
     };
     let salvo = mapa.para_json();
     match estado.mapa.definir(mapa) {
         Ok(()) => Json(json!({ "mapa": salvo })).into_response(),
-        Err(e) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
+        Err(e) => erro(StatusCode::INTERNAL_SERVER_ERROR, "gravacao_falhou", format!("não consegui gravar: {e}")),
     }
 }
 
@@ -138,26 +143,31 @@ pub(crate) async fn parear(
     // com o código certo, a resposta só sai depois que quem está no PC aprova (ou não)
     match estado.acesso.parear(&pedido.codigo, &nome, agora(), origem).await {
         Pareamento_::Pareado(p) => Json(json!({ "token": p.token, "id": p.id })).into_response(),
-        Pareamento_::Incorreto => erro(StatusCode::UNAUTHORIZED, "código incorreto ou expirado"),
+        Pareamento_::Incorreto => erro(StatusCode::UNAUTHORIZED, "codigo_incorreto", "código incorreto ou expirado"),
         Pareamento_::Fechado => erro(
             StatusCode::FORBIDDEN,
+            "pareamento_fechado",
             "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo",
         ),
-        Pareamento_::Negado => erro(StatusCode::FORBIDDEN, "o pedido foi negado no PC"),
+        Pareamento_::Negado => erro(StatusCode::FORBIDDEN, "pedido_negado", "o pedido foi negado no PC"),
         Pareamento_::Expirou => erro(
             StatusCode::REQUEST_TIMEOUT,
+            "pedido_expirou",
             "ninguém aprovou o pedido no PC a tempo: abra o pareamento e tente de novo",
         ),
         Pareamento_::Ocupado => erro(
             StatusCode::CONFLICT,
+            "pedido_ocupado",
             "já há outro pedido de pareamento aguardando aprovação no PC",
         ),
         Pareamento_::Bloqueado { segundos } => (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, segundos.to_string())],
-            Json(json!({ "erro": "muitas tentativas erradas", "segundos": segundos })),
+            Json(json!({ "codigo": "muitas_tentativas", "erro": "muitas tentativas erradas", "segundos": segundos })),
         )
             .into_response(),
-        Pareamento_::Falha(e) => erro(StatusCode::INTERNAL_SERVER_ERROR, format!("não consegui gravar: {e}")),
+        Pareamento_::Falha(e) => {
+            erro(StatusCode::INTERNAL_SERVER_ERROR, "gravacao_falhou", format!("não consegui gravar: {e}"))
+        }
     }
 }

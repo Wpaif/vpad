@@ -22,9 +22,16 @@ describe("pairDevice", () => {
     expect(JSON.parse(init.body)).toEqual({ codigo: "123456", nome: "iPhone" });
   });
 
+  it("quem decide entre fechado e negado é o código, não o texto do servidor", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { codigo: "pedido_negado", erro: "mensagem que cita fechado" }));
+    const erro = await pairDevice("123456", "x", fetchFn).catch((e: Error) => e);
+    expect((erro as Error).message).toMatch(/negado/i);
+    expect((erro as Error).message).not.toMatch(/fechado/i);
+  });
+
   it("pareamento fechado: diz para abrir no PC com Enter", async () => {
     const fetchFn = vi.fn().mockResolvedValue(
-      resposta(403, { erro: "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo" }),
+      resposta(403, { codigo: "pareamento_fechado", erro: "o pareamento está fechado: no PC, pressione Enter no terminal do vpad para abri-lo" }),
     );
     const erro = await pairDevice("123456", "iPhone", fetchFn).catch((e) => e);
     expect(erro.message).toMatch(/fechado/i);
@@ -32,7 +39,7 @@ describe("pairDevice", () => {
   });
 
   it("pedido negado no PC: diz que foi negado", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { erro: "o pedido foi negado no PC" }));
+    const fetchFn = vi.fn().mockResolvedValue(resposta(403, { codigo: "pedido_negado", erro: "o pedido foi negado no PC" }));
     await expect(pairDevice("123456", "iPhone", fetchFn)).rejects.toThrow(/negado/i);
   });
 

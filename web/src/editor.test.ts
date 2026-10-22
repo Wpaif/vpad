@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { CONTROLS } from "./controls";
 import { mountKeyEditor, type EditorDeps } from "./editor";
+import { setLanguage } from "./i18n";
 import type { KeyboardConfig, KeyMap } from "./keyboard";
 
 const TECLAS = [
@@ -175,5 +176,25 @@ describe("rolagem", () => {
   it("as duas listas são áreas rolável marcadas com data-scroll", async () => {
     await abrir();
     expect(root.querySelectorAll("[data-scroll]").length).toBe(2);
+  });
+});
+
+describe("idioma", () => {
+  it("em inglês os grupos e as teclas com nome em palavra aparecem traduzidos", async () => {
+    setLanguage("en");
+    await abrir();
+    row("A").click();
+    const grupos = [...picker().querySelectorAll("h4")].map((h) => h.textContent);
+    expect(grupos).toEqual(["Letters", "Special", "Arrows"]);
+    expect(picker().querySelector('[data-key="Space"]')!.textContent).toBe("Space");
+    expect(picker().querySelector('[data-key="KeyK"]')!.textContent).toBe("K");
+    // a tecla de cada controle também aparece com o nome traduzido
+    await (async () => {
+      load.mockResolvedValue(config({ A: "Space" }));
+      await editor.open();
+      await flush();
+    })();
+    expect(chip("A")).toBe("Space");
+    setLanguage("pt-BR");
   });
 });

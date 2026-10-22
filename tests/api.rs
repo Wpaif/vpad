@@ -138,10 +138,14 @@ async fn put_com_tecla_ou_controle_desconhecido_e_400_e_nao_muda_nada() {
     let (status, corpo) = teclado(&a, "PUT", Some(&pedido(json!({"A": "Hyper"})))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(corpo["erro"].as_str().unwrap().contains("Hyper"));
+    assert_eq!(corpo["codigo"], "mapa_invalido");
+    assert_eq!(corpo["codigo"], "mapa_invalido");
 
     let (status, corpo) = teclado(&a, "PUT", Some(&pedido(json!({"Turbo": "KeyA"})))).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert!(corpo["erro"].as_str().unwrap().contains("Turbo"));
+    assert_eq!(corpo["codigo"], "mapa_invalido");
+    assert_eq!(corpo["codigo"], "mapa_invalido");
 
     assert_eq!(*a.armazem.atual(), Mapa::padrao());
 }
@@ -166,6 +170,7 @@ async fn falha_ao_gravar_em_disco_e_500_e_o_mapa_continua() {
     let (status, corpo) = teclado(&a, "PUT", Some(&pedido(json!({"A": "Space"})))).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(corpo["erro"].is_string());
+    assert_eq!(corpo["codigo"], "gravacao_falhou");
     assert_eq!(*a.armazem.atual(), Mapa::padrao());
     let _ = fs::remove_dir_all(&pasta);
 }
@@ -192,6 +197,7 @@ async fn sem_um_token_de_aparelho_pareado_a_api_responde_401_e_nao_muda_nada() {
         let (status, _, corpo) = chamar_com(&a.app, "GET", "/api/teclado", None, autorizacao.as_deref()).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED, "GET com {autorizacao:?}");
         assert!(corpo["erro"].is_string());
+        assert_eq!(corpo["codigo"], "nao_autorizado");
 
         let p = pedido(json!({"A": "Space"}));
         let (status, _, _) = chamar_com(&a.app, "PUT", "/api/teclado", Some(&p), autorizacao.as_deref()).await;
@@ -337,6 +343,7 @@ async fn negado_no_pc_e_403_sem_token() {
     let (status, _, corpo) = parear_e_responder(&a, &codigo_certo(&a), Some("intruso"), Decisao::Negado).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("negado"));
+    assert_eq!(corpo["codigo"], "pedido_negado");
     assert!(corpo.get("token").is_none());
     assert_eq!(a.acesso.dispositivos().listar().len(), antes);
 }
@@ -347,6 +354,7 @@ async fn ninguem_aprovar_no_prazo_e_408() {
     let (status, _, corpo) = parear(&a, &codigo_certo(&a), None).await;
     assert_eq!(status, StatusCode::REQUEST_TIMEOUT);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("aprov"));
+    assert_eq!(corpo["codigo"], "pedido_expirou");
 }
 
 #[tokio::test]
@@ -358,6 +366,7 @@ async fn depois_de_um_pareamento_a_janela_fecha_e_um_novo_precisa_ser_aberto_no_
     let (status, _, corpo) = parear_sem_abrir(&a, &outro, None).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("fechado"));
+    assert_eq!(corpo["codigo"], "pareamento_fechado");
 }
 
 #[tokio::test]
@@ -384,6 +393,7 @@ async fn pedido_enquanto_outro_espera_aprovacao_no_pc_e_409() {
     let (status, _, corpo) = parear_sem_abrir(&a, &codigo_certo(&a), None).await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("aguardando"));
+    assert_eq!(corpo["codigo"], "pedido_ocupado");
     assert!(a.acesso.pareamento().aberto(agora()), "o código foi gasto, mas a janela continua aberta");
 
     let id = a.acesso.aprovacoes().pendente().unwrap().id;
@@ -398,6 +408,7 @@ async fn codigo_errado_e_401_e_nao_pareia_nem_pede_aprovacao() {
     let (status, _, corpo) = parear(&a, &codigo_errado(&a), None).await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("código"));
+    assert_eq!(corpo["codigo"], "codigo_incorreto");
     assert_eq!(a.acesso.dispositivos().listar().len(), antes);
     assert!(a.acesso.aprovacoes().pendente().is_none());
 }
@@ -422,6 +433,7 @@ async fn muitas_tentativas_erradas_bloqueiam_ate_o_codigo_certo_com_429() {
     let espera: u64 = headers[header::RETRY_AFTER].to_str().unwrap().parse().unwrap();
     assert!((1..=60).contains(&espera), "{espera}");
     assert_eq!(corpo["segundos"].as_u64().unwrap(), espera);
+    assert_eq!(corpo["codigo"], "muitas_tentativas");
 }
 
 #[tokio::test]
@@ -450,6 +462,7 @@ async fn com_o_pareamento_fechado_o_codigo_certo_e_recusado_com_403_e_instrucao(
     assert_eq!(status, StatusCode::FORBIDDEN);
     let erro = corpo["erro"].as_str().unwrap().to_lowercase();
     assert!(erro.contains("fechado") && erro.contains("enter"), "{erro}");
+    assert_eq!(corpo["codigo"], "pareamento_fechado");
     assert_eq!(a.acesso.dispositivos().listar().len(), antes);
 }
 
@@ -508,6 +521,7 @@ async fn aparelho_sem_permissao_de_teclado_nao_le_nem_grava_o_mapa() {
     let (status, _, corpo) = chamar_com(&a.app, "GET", "/api/teclado", None, Some(&auth)).await;
     assert_eq!(status, StatusCode::FORBIDDEN);
     assert!(corpo["erro"].as_str().unwrap().to_lowercase().contains("teclado"));
+    assert_eq!(corpo["codigo"], "sem_permissao_teclado");
 
     let p = pedido(json!({"A": "Space"}));
     let (status, _, _) = chamar_com(&a.app, "PUT", "/api/teclado", Some(&p), Some(&auth)).await;

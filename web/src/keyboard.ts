@@ -42,8 +42,12 @@ export async function saveKeyboard(mapa: KeyMap, token: string, fetchFn: FetchFn
   } catch {
     throw new Error(t("keyboard.error.offline"));
   }
-  const body = (await res.json().catch(() => ({}))) as { mapa?: KeyMap; erro?: string };
+  const body = (await res.json().catch(() => ({}))) as { mapa?: KeyMap; codigo?: string };
+  if (res.status === 401) throw new Error(t("keyboard.error.denied"));
   if (res.status === 403) throw new Error(t("keyboard.error.noPermission"));
-  if (!res.ok) throw new Error(body.erro ?? t("keyboard.error.save", { status: res.status }));
+  // o texto (em português) que o servidor manda junto não é mostrado: vale o código, traduzido aqui
+  if (body.codigo === "mapa_invalido") throw new Error(t("keyboard.error.invalid"));
+  if (body.codigo === "gravacao_falhou") throw new Error(t("keyboard.error.writeFailed"));
+  if (!res.ok) throw new Error(t("keyboard.error.save", { status: res.status }));
   return body.mapa ?? mapa;
 }

@@ -113,7 +113,7 @@ describe("os módulos traduzem na hora do uso (e não ao carregar)", () => {
     const resposta = (status: number, corpo: unknown = {}) =>
       vi.fn(async () => new Response(JSON.stringify(corpo), { status })) as unknown as typeof fetch;
     await expect(pairDevice("123456", "x", resposta(401))).rejects.toThrow(c["pairing.error.wrongCode"]);
-    await expect(pairDevice("123456", "x", resposta(403, { erro: "o pareamento está fechado" }))).rejects.toThrow(c["pairing.error.closed"]);
+    await expect(pairDevice("123456", "x", resposta(403, { codigo: "pareamento_fechado", erro: "o pareamento está fechado" }))).rejects.toThrow(c["pairing.error.closed"]);
     await expect(pairDevice("123456", "x", resposta(409))).rejects.toThrow(c["pairing.error.busy"]);
     await expect(pairDevice("123456", "x", resposta(429, { segundos: 42 }))).rejects.toThrow(
       c["pairing.error.rateLimited"]!.replace("{seconds}", "42"),

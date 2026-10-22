@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { setLanguage } from "./i18n";
 import { applyKeyboardLabels, applyProfileLabels, displayedLabel } from "./labels";
 import { montarPagina } from "./testing/pagina";
 
@@ -238,5 +239,19 @@ describe("displayedLabel (o nome que o botão tem agora)", () => {
   it("controle que não tem rótulo mutável (direcional, analógico) devolve null", () => {
     expect(displayedLabel(pad, "Up")).toBeNull();
     expect(displayedLabel(pad, "StickLeft")).toBeNull();
+  });
+});
+
+describe("modo teclado em outro idioma", () => {
+  it("o botão mostra o nome traduzido da tecla (Espaço vira Space em inglês)", () => {
+    setLanguage("en");
+    applyKeyboardLabels(pad, { RB: "Space", A: "KeyK" }, [
+      { id: "Space", rotulo: "Espaço" },
+      { id: "KeyK", rotulo: "K" },
+    ]);
+    expect(text("[data-btn=RB]")).toBe("Space");
+    expect(text("[data-btn=A]")).toBe("K");
+    expect(displayedLabel(pad, "RB")).toBe("Space");
+    setLanguage("pt-BR");
   });
 });

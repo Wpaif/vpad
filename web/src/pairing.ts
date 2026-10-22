@@ -35,14 +35,14 @@ export async function pairDevice(code: string, name: string, fetchFn: FetchFn = 
     token?: unknown;
     id?: unknown;
     segundos?: unknown;
-    erro?: unknown;
+    codigo?: unknown;
   };
 
   if (res.status === 401) {
     throw new PairingError(t("pairing.error.wrongCode"));
   }
   if (res.status === 403) {
-    if (typeof body.erro === "string" && /fechado/i.test(body.erro)) {
+    if (body.codigo === "pareamento_fechado") {
       throw new PairingError(t("pairing.error.closed"));
     }
     throw new PairingError(t("pairing.error.denied"));
