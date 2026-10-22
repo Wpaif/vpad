@@ -1,0 +1,86 @@
+# Empacota o binário para Linux x86_64 e o anexa ao release do GitHub.
+# - Ao criar uma tag v*: gera o pacote e publica (cria o release com as notas do changelog, se não existir).
+# - Manualmente (Actions → Release → Run workflow): informe a tag de um release que já existe para
+#   anexar o pacote a ele; sem tag, só gera o pacote como artefato (para testar).
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag a empacotar e publicar (por exemplo v0.1.0). Em branco: só gera o artefato de teste.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  empacotar:
+    name: empacotar
+    # glibc mais antiga: o binário roda também em distribuições mais velhas que o runner
+    runs-on: ubuntu-22.04
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Construir a página (ela vai embutida no binário)
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked
+      - name: Conferir que o binário abre sem /dev/uinput
+        run: |
+          export XDG_CONFIG_HOME="$(mktemp -d)"
+          ./target/release/vpad --dispositivos
+      - name: Empacotar
+        run: |
+          versao="${TAG#v}"
+          ./scripts/empacotar-release.sh "$versao" target/release/vpad dist-release
+          ls -l dist-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pacote
+          path: dist-release
+          retention-days: 7
+
+  publicar:
+    name: publicar
+    needs: empacotar
+    if: ${{ github.event_name == 'push' || inputs.tag != '' }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: pacote
+          path: dist-release
+      - name: Criar o release, se ainda não existir, e anexar o pacote
+        run: |
+          versao="${TAG#v}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            ./scripts/notas-do-release.sh "$versao" > notas.md
+            gh release create "$TAG" --verify-tag --title "vpad $versao" --notes-file notas.md
+          fi
+          gh release upload "$TAG" dist-release/* --clobber
