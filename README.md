@@ -123,10 +123,10 @@ Comandos do terminal do servidor (digite e tecle Enter):
 | Comando | O que faz |
 | --- | --- |
 | `Enter` | abre o pareamento por 2 minutos e mostra o código |
-| `f` | fecha o pareamento agora |
+| `f` ou `close` | fecha o pareamento agora |
 | `c` | abre por 5 minutos a página que instala o certificado |
 | `?` | ajuda |
-| `s` / `t` / outra | responde a um pedido de aprovação: sim / sim e liberar teclado / negar |
+| `s` ou `y` / `t` ou `k` / outra | responde a um pedido de aprovação: sim / sim e liberar o teclado / negar |
 
 ## Opções de linha de comando
 
@@ -145,7 +145,7 @@ vpad --permitir-teclado <id> | --negar-teclado <id>
 | `--porta-https` | porta HTTPS do controle. Padrão: `8443` |
 | `--parear` | abre o pareamento ao iniciar (útil quando o servidor roda sem terminal) |
 | `--dispositivos` | lista os aparelhos pareados (id, nome, validade, último uso, teclado) |
-| `--revogar` | revoga um aparelho pelo id, ou todos. Vale na hora, mesmo com o servidor rodando |
+| `--revogar` | revoga um aparelho pelo id, ou todos (`todos` ou `all`). Vale na hora, mesmo com o servidor rodando |
 | `--permitir-teclado` / `--negar-teclado` | libera ou bloqueia o modo teclado de um aparelho |
 
 ## Layout dos botões
@@ -288,8 +288,15 @@ porque o idioma é escolhido só depois do carregamento) e `data-i18n` no HTML. 
 A página de configuração do certificado (a que o iPhone abre em `http://IP-DO-PC:8080`) e o perfil
 `.mobileconfig` também existem nos seis idiomas: o servidor escolhe pelo `?lang=` da URL ou pelo
 `Accept-Language` do navegador (sem tradução, inglês; sem informação, português). Os textos estão em
-`src/idiomas.rs`, com testes que exigem todos os campos preenchidos nos seis idiomas. O terminal do PC
-continua em português.
+`src/idiomas.rs`, com testes que exigem todos os campos preenchidos nos seis idiomas.
+
+O **terminal do PC** tem dois idiomas: português quando o sistema está em português e inglês nos
+demais casos. O idioma vem de `VPAD_LANG` (por exemplo `VPAD_LANG=pt` ou `VPAD_LANG=en`, que vence
+tudo), depois de `LC_ALL`, `LC_MESSAGES` e `LANG`. Os avisos da partida estão em `src/avisos.rs` e os
+demais textos usam `tr!("texto em português", "english text")` (ou `txt(...)` para texto fixo) no lugar
+em que aparecem, com o compilador conferindo os marcadores dos dois. As opções da linha de comando
+(`--permitir-teclado`, `--revogar`…) são as mesmas nos dois idiomas, e as respostas do terminal
+aceitam as duas famílias de letras (`s`/`y`, `t`/`k`).
 
 Na API, toda resposta de erro traz um `codigo` estável (por exemplo
 `pareamento_fechado`, `mapa_invalido`, `gravacao_falhou`) além da mensagem em português, e a página
