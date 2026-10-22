@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { limitShift, snapShift, type Rect } from "./layoutGeometry";
+import { limitScale, limitShift, minScaleFor, scaleRatio, snapShift, type Rect } from "./layoutGeometry";
 
 const r = (left: number, top: number, width: number, height: number): Rect => ({
   left,
@@ -79,5 +79,53 @@ describe("snapShift", () => {
       guideX: null,
       guideY: null,
     });
+  });
+});
+
+describe("scaleRatio", () => {
+  const c = { x: 100, y: 100 };
+  it("a razão é a distância nova sobre a antiga ao centro", () => {
+    expect(scaleRatio(c, { x: 150, y: 100 }, { x: 200, y: 100 })).toBe(2);
+    expect(scaleRatio(c, { x: 200, y: 100 }, { x: 150, y: 100 })).toBe(0.5);
+  });
+  it("não divide por zero quando o toque começa no centro", () => {
+    expect(Number.isFinite(scaleRatio(c, { x: 100, y: 100 }, { x: 150, y: 100 }))).toBe(true);
+  });
+});
+
+describe("minScaleFor", () => {
+  it("nunca deixa o menor controle ficar abaixo de 44 px", () => {
+    expect(minScaleFor(88)).toBe(0.5); // 44/88 = 0,5 (e o piso é 0,5)
+    expect(minScaleFor(60)).toBeCloseTo(44 / 60, 5);
+  });
+  it("controle que já é menor que 44 por padrão não pode encolher", () => {
+    expect(minScaleFor(34)).toBe(1);
+  });
+  it("sem medida usa o piso global", () => {
+    expect(minScaleFor(0)).toBe(0.5);
+  });
+});
+
+describe("limitScale", () => {
+  // grupo de 100x100 centrado em (400,200), escala atual 1; tela 800x400
+  const rect = r(350, 150, 100, 100);
+  it("respeita o mínimo e o máximo pedidos", () => {
+    expect(limitScale(0.1, rect, 1, BOUNDS, 0.7, 2)).toBe(0.7);
+    expect(limitScale(5, rect, 1, BOUNDS, 0.5, 2)).toBe(2);
+    expect(limitScale(1.3, rect, 1, BOUNDS, 0.5, 2)).toBe(1.3);
+  });
+  it("não deixa crescer além da borda da tela (centro fixo)", () => {
+    // centro y=200, meia altura 50, borda a 200 de distância → no máximo 4; usamos centro perto do topo
+    const perto = r(350, 20, 100, 100); // centro y=70, 70 até o topo → máx 70/50 = 1,4
+    expect(limitScale(2, perto, 1, BOUNDS, 0.5, 2)).toBeCloseTo(1.4, 5);
+  });
+  it("a escala atual entra na conta (o retângulo medido já está escalado)", () => {
+    // mesmo grupo, mas o retângulo de 200x200 mede escala 2: tamanho base 100
+    const medido = r(300, 100, 200, 200);
+    expect(limitScale(1.5, medido, 2, BOUNDS, 0.5, 2)).toBe(1.5);
+  });
+  it("se nem o mínimo cabe, fica no mínimo", () => {
+    const apertado = r(350, 5, 100, 100); // centro y=55, máx 1,1 < mínimo 1,3
+    expect(limitScale(2, apertado, 1, BOUNDS, 1.3, 2)).toBe(1.3);
   });
 });

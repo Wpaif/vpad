@@ -141,6 +141,7 @@ function start(token: string) {
     editButton: document.getElementById("edit-layout")!,
     store: layoutStore,
     onChange: () => {
+      void layoutEditor.refresh();
       if (!layoutStore.editing) return;
       statsEl.hidden = true;
       clearInterval(refresh);
@@ -155,7 +156,7 @@ function start(token: string) {
   };
   const guiaX = guia("x");
   const guiaY = guia("y");
-  mountLayoutEditor({
+  const layoutEditor = mountLayoutEditor({
     pad,
     store: layoutStore,
     appSize: () => ({ w: window.innerWidth, h: window.innerHeight }),

@@ -10,7 +10,8 @@ const BOUNDS = rect(0, 0, 800, 400);
 
 let store: LayoutStore;
 let pad: HTMLElement;
-let stop: () => void;
+let editor: { stop: () => void; refresh: () => Promise<void> };
+const stop = () => editor.stop();
 let guides: Array<{ x: number | null; y: number | null }>;
 
 const grupo = (id: string) => pad.querySelector<HTMLElement>(`[data-grupo=${id}]`)!;
@@ -33,7 +34,7 @@ beforeEach(() => {
   }
   store = createLayoutStore();
   guides = [];
-  stop = mountLayoutEditor({
+  editor = mountLayoutEditor({
     pad,
     store,
     appSize: () => ({ w: 800, h: 400 }),
@@ -108,6 +109,96 @@ describe("layoutEditor", () => {
     ptr(grupo("face"), "pointerdown", 1, 150, 150);
     ptr(grupo("face"), "pointermove", 1, 200, 190);
     expect(faceAdjust()).toEqual({ dx: 0, dy: 0, scale: 1 });
-    stop = vi.fn();
+    editor = { stop: vi.fn(), refresh: async () => {} };
+  });
+});
+
+describe("alças de redimensionar", () => {
+  const alca = (id: string) => document.querySelector<HTMLElement>(`[data-alca=${id}]`);
+
+  beforeEach(() => {
+    // o botão A mede 60 px: o piso de toque (44 px) dá escala mínima 44/60
+    grupo("face").querySelector("button")!.getBoundingClientRect = () => ({ ...rect(120, 120, 60, 60), width: 60, height: 60 }) as DOMRect;
+  });
+
+  it("não há alças fora do modo edição", async () => {
+    await editor.refresh();
+    expect(alca("face")).toBeNull();
+  });
+
+  it("no modo edição há uma alça por grupo, no canto de baixo à direita", async () => {
+    store.edit();
+    await editor.refresh();
+    expect(document.querySelectorAll("[data-alca]").length).toBe(2);
+    expect(alca("face")!.style.left).toBe("200px");
+    expect(alca("face")!.style.top).toBe("200px");
+  });
+
+  it("a alça de um grupo colado na borda fica inteira dentro da tela", async () => {
+    grupo("face").getBoundingClientRect = () => ({ ...rect(700, 300, 100, 100), width: 100, height: 100 }) as DOMRect;
+    store.edit();
+    await editor.refresh();
+    expect(alca("face")!.style.left).toBe("786px"); // 800 - meia alça (14)
+    expect(alca("face")!.style.top).toBe("386px"); // 400 - 14
+  });
+
+  it("as alças somem ao sair da edição", async () => {
+    store.edit();
+    await editor.refresh();
+    store.cancel();
+    await editor.refresh();
+    expect(alca("face")).toBeNull();
+  });
+
+  it("arrastar a alça para longe do centro amplia o grupo", async () => {
+    store.edit();
+    await editor.refresh();
+    ptr(alca("face")!, "pointerdown", 1, 200, 200); // centro (150,150): distância 70,7
+    ptr(alca("face")!, "pointermove", 1, 220.71, 220.71); // distância ~100 → razão ~1,41
+    expect(faceAdjust().scale).toBeCloseTo(1.414, 2);
+  });
+
+  it("o máximo é 2", async () => {
+    store.edit();
+    await editor.refresh();
+    ptr(alca("face")!, "pointerdown", 1, 200, 200);
+    ptr(alca("face")!, "pointermove", 1, 600, 600);
+    expect(faceAdjust().scale).toBe(2);
+  });
+
+  it("encolher para quando o menor controle chega a 44 px", async () => {
+    store.edit();
+    await editor.refresh();
+    ptr(alca("face")!, "pointerdown", 1, 200, 200);
+    ptr(alca("face")!, "pointermove", 1, 151, 151); // pediria ~0,02
+    expect(faceAdjust().scale).toBeCloseTo(44 / 60, 3);
+  });
+
+  it("redimensionar não mexe na posição", async () => {
+    store.edit();
+    await editor.refresh();
+    ptr(alca("face")!, "pointerdown", 1, 200, 200);
+    ptr(alca("face")!, "pointermove", 1, 230, 230);
+    expect(faceAdjust().dx).toBe(0);
+    expect(faceAdjust().dy).toBe(0);
+  });
+
+  it("soltar termina o redimensionamento", async () => {
+    store.edit();
+    await editor.refresh();
+    ptr(alca("face")!, "pointerdown", 1, 200, 200);
+    ptr(alca("face")!, "pointermove", 1, 230, 230);
+    ptr(alca("face")!, "pointerup", 1, 230, 230);
+    const depois = faceAdjust().scale;
+    ptr(alca("face")!, "pointermove", 1, 400, 400);
+    expect(faceAdjust().scale).toBe(depois);
+  });
+
+  it("depois de parar o editor, as alças são removidas", async () => {
+    store.edit();
+    await editor.refresh();
+    editor.stop();
+    expect(document.querySelectorAll("[data-alca]").length).toBe(0);
+    editor = { stop: vi.fn(), refresh: async () => {} };
   });
 });
