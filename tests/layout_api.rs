@@ -88,7 +88,9 @@ fn pedido(layout: Value) -> String {
 #[tokio::test]
 async fn sem_token_e_401_no_get_e_no_put() {
     let a = ambiente();
-    assert_eq!(chamar(&a.app, "GET", None, None).await.0, StatusCode::UNAUTHORIZED);
+    let (status, corpo) = chamar(&a.app, "GET", None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(corpo["codigo"], "nao_autorizado");
     assert_eq!(chamar(&a.app, "PUT", Some(pedido(layout_completo())), None).await.0, StatusCode::UNAUTHORIZED);
     assert_eq!(chamar(&a.app, "GET", None, Some("0123456789abcdef0123456789abcdef")).await.0, StatusCode::UNAUTHORIZED);
 }
@@ -133,6 +135,7 @@ async fn layout_invalido_e_400_e_nao_muda_o_que_estava_salvo() {
         let (status, corpo) = chamar(&a.app, "PUT", Some(pedido(ruim.clone())), Some(&a.token)).await;
         assert_eq!(status, StatusCode::BAD_REQUEST, "{ruim}");
         assert!(corpo["erro"].is_string());
+        assert_eq!(corpo["codigo"], "layout_invalido");
     }
     let (_, depois) = chamar(&a.app, "GET", None, Some(&a.token)).await;
     assert_eq!(depois["layout"], layout_completo());
@@ -193,6 +196,7 @@ async fn falha_de_disco_no_put_e_500_e_nao_muda_o_layout() {
     let (status, corpo) = chamar(&a.app, "PUT", Some(pedido(layout_completo())), Some(&a.token)).await;
     assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
     assert!(corpo["erro"].is_string());
+    assert_eq!(corpo["codigo"], "gravacao_falhou");
     assert_eq!(chamar(&a.app, "GET", None, Some(&a.token)).await.1, json!({ "layout": null }));
     let _ = fs::remove_dir_all(&pasta);
 }
